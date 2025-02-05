@@ -28,51 +28,52 @@ export enum Primitive {
   Broadcast = "broadcast",
 }
 
-// Note: These primitive wrappers have fudged types.
+// Note: These primitive wrappers should have fudged types.
 //
-// They can actually take any `TracerValue` and return any `Tracer` subclass
-// based on the current stack of interpreters. But we hide that away from users
-// to mimic JAX's composable tracing transformations.
+// They can take any `TracerValue` and return any `Tracer` subclass based on the
+// current stack of interpreters. But we hide that away from users to mimic
+// JAX's composable tracing transformations.
 
+// TODO: Re-export all the primitives as `(ArrayLike, ...) => Array` wrappers.
 export type ArrayLike = Array | number | boolean;
 
-export function add(x: ArrayLike, y: ArrayLike) {
-  return bind1(Primitive.Add, [x, y]) as Array;
+export function add(x: TracerValue, y: TracerValue) {
+  return bind1(Primitive.Add, [x, y]);
 }
 
-export function mul(x: ArrayLike, y: ArrayLike) {
-  return bind1(Primitive.Mul, [x, y]) as Array;
+export function mul(x: TracerValue, y: TracerValue) {
+  return bind1(Primitive.Mul, [x, y]);
 }
 
-export function neg(x: ArrayLike) {
-  return bind1(Primitive.Neg, [x]) as Array;
+export function neg(x: TracerValue) {
+  return bind1(Primitive.Neg, [x]);
 }
 
-export function sin(x: ArrayLike) {
-  return bind1(Primitive.Sin, [x]) as Array;
+export function sin(x: TracerValue) {
+  return bind1(Primitive.Sin, [x]);
 }
 
-export function cos(x: ArrayLike) {
-  return bind1(Primitive.Cos, [x]) as Array;
+export function cos(x: TracerValue) {
+  return bind1(Primitive.Cos, [x]);
 }
 
-export function greater(x: ArrayLike, y: ArrayLike) {
-  return bind1(Primitive.Greater, [x, y]) as Array;
+export function greater(x: TracerValue, y: TracerValue) {
+  return bind1(Primitive.Greater, [x, y]);
 }
 
-export function less(x: ArrayLike, y: ArrayLike) {
-  return bind1(Primitive.Less, [x, y]) as Array;
+export function less(x: TracerValue, y: TracerValue) {
+  return bind1(Primitive.Less, [x, y]);
 }
 
-export function transpose(x: ArrayLike, perm: number[]) {
-  return bind1(Primitive.Transpose, [x], { perm }) as Array;
+export function transpose(x: TracerValue, perm?: number[]) {
+  return bind1(Primitive.Transpose, [x], { perm });
 }
 
-export function broadcast(x: ArrayLike, shape: number[], axes: number[]) {
-  return bind1(Primitive.Broadcast, [x], { shape, axes }) as Array;
+export function broadcast(x: TracerValue, shape: number[], axes: number[]) {
+  return bind1(Primitive.Broadcast, [x], { shape, axes });
 }
 
-export function reduceSum(x: ArrayLike, axis: number[] | null) {
+export function reduceSum(x: TracerValue, axis?: number | number[]) {
   if (axis === null) {
     if (x instanceof Tracer) {
       axis = [...JsArray(x.aval.shape.length).keys()];
@@ -83,7 +84,7 @@ export function reduceSum(x: ArrayLike, axis: number[] | null) {
   if (typeof axis === "number") {
     axis = [axis];
   }
-  return bind1(Primitive.ReduceSum, [x], { axis }) as Array;
+  return bind1(Primitive.ReduceSum, [x], { axis });
 }
 
 function bind1(
@@ -109,16 +110,15 @@ let dynamicTrace: MainTrace | null = null;
 function newMain(
   traceType: any,
   globalData: any | null = null
-): Disposable & { main: MainTrace } {
+): Disposable & MainTrace {
   const level = traceStack.length;
   const main = { level, traceType, globalData };
   traceStack.push(main);
-  return {
-    main,
+  return Object.assign(main, {
     [Symbol.dispose]() {
       traceStack.pop();
     },
-  };
+  });
 }
 
 type TracerValue = Tracer | number | boolean;
@@ -187,11 +187,6 @@ abstract class Tracer {
 */
 }
 
-const swap =
-  <X, Y, R>(f: (y: Y, x: X) => R) =>
-  (x: X, y: Y) =>
-    f(y, x);
-
 const JsArray = globalThis.Array;
 
 class ShapedArray implements AbstractValue {
@@ -256,6 +251,13 @@ export class Array extends Tracer {
   get aval(): AbstractValue {
     return new ConcreteArray(this.data);
   }
+}
+
+export function array(
+  values: tf.TensorLike,
+  { shape, dtype }: { shape?: number[]; dtype?: DType } = {}
+): Array {
+  return new Array(tf.tensor(values, shape, dtype));
 }
 
 // TODO: Remove, only used during testing.
@@ -347,12 +349,9 @@ class EvalTrace extends Trace {
 traceStack.push({ level: 0, traceType: EvalTrace, globalData: null });
 const baseArrayTrace = new EvalTrace(traceStack[0]);
 
-type GenericRule<T extends Tracer> = (
-  tracers: T[],
-  params: Record<string, any>
-) => T[];
+type ImplRule = (tracers: Array[], params: Record<string, any>) => Array[];
 
-const implRules: Record<Primitive, GenericRule<Array>> = {
+const implRules: Record<Primitive, ImplRule> = {
   [Primitive.Add]([x, y]) {
     return [new Array(tf.add(x.data, y.data))];
   },
@@ -395,9 +394,113 @@ const implRules: Record<Primitive, GenericRule<Array>> = {
   },
 };
 
-export function array(
-  values: tf.TensorLike,
-  { shape, dtype }: { shape?: number[]; dtype?: DType } = {}
-): Array {
-  return new Array(tf.tensor(values, shape, dtype));
+function zerosLike(val: TracerValue): Array {
+  const aval = getAval(val);
+  return new Array(tf.zeros(aval.shape, aval.dtype));
+}
+
+function unzip2<T, U>(pairs: [T, U][]): [T[], U[]] {
+  const lst1: T[] = [];
+  const lst2: U[] = [];
+  for (const [x, y] of pairs) {
+    lst1.push(x);
+    lst2.push(y);
+  }
+  return [lst1, lst2];
+}
+
+function zip<T, U>(xs: T[], ys: U[]): [T, U][] {
+  return xs.map((x, i) => [x, ys[i]]);
+}
+
+class JVPTracer extends Tracer {
+  constructor(
+    trace: Trace,
+    public readonly primal: Tracer,
+    public readonly tangent: Tracer
+  ) {
+    super(trace);
+  }
+
+  get aval(): AbstractValue {
+    return this.primal.aval;
+  }
+}
+
+class JVPTrace extends Trace {
+  pure(val: TracerValue) {
+    return this.lift(pureArray(val));
+  }
+
+  lift(val: Tracer): Tracer {
+    return new JVPTracer(this, val, zerosLike(val));
+  }
+
+  processPrimitive(
+    primitive: Primitive,
+    tracers: JVPTracer[],
+    params: Record<string, any>
+  ): JVPTracer[] {
+    const [primalsIn, tangentsIn] = unzip2(
+      tracers.map((x) => [x.primal, x.tangent])
+    );
+    const jvpRule: JvpRule | undefined = jvpRules[primitive];
+    if (jvpRule === undefined) {
+      throw new Error(`No JVP rule for: ${primitive}`);
+    }
+    const [primalsOut, tangentsOut] = jvpRule(primalsIn, tangentsIn, params);
+    return zip(primalsOut, tangentsOut).map(
+      ([x, t]) => new JVPTracer(this, x, t)
+    );
+  }
+}
+
+type JvpRule = (
+  primal: Tracer[],
+  tangents: Tracer[],
+  params: Record<string, any>
+) => [Tracer[], Tracer[]];
+
+const jvpRules: Partial<Record<Primitive, JvpRule>> = {
+  [Primitive.Add]([x, y], [dx, dy]) {
+    return [[x.add(y)], [dx.add(dy)]];
+  },
+  [Primitive.Mul]([x, y], [dx, dy]) {
+    return [[x.mul(y)], [x.mul(dy).add(dx.mul(y))]];
+  },
+  [Primitive.Neg]([x], [dx]) {
+    return [[x.neg()], [dx.neg()]];
+  },
+  [Primitive.Sin]([x], [dx]) {
+    return [[sin(x)], [cos(x).mul(dx)]];
+  },
+  [Primitive.Cos]([x], [dx]) {
+    return [[cos(x)], [neg(sin(x)).mul(dx)]];
+  },
+  [Primitive.ReduceSum]([x], [dx], { axis }: { axis?: number | number[] }) {
+    return [[reduceSum(x, axis)], [reduceSum(dx, axis)]];
+  },
+  [Primitive.Greater]([x, y], _tangents) {
+    const outPrimal = greater(x, y);
+    return [[outPrimal], [zerosLike(outPrimal)]];
+  },
+  [Primitive.Less]([x, y], _tangents) {
+    const outPrimal = less(x, y);
+    return [[outPrimal], [zerosLike(outPrimal)]];
+  },
+};
+
+export function jvpV1(
+  f: (...x: Tracer[]) => Tracer,
+  primals: TracerValue[],
+  tangents: TracerValue[]
+): [Tracer, Tracer] {
+  using main = newMain(JVPTrace);
+  const trace = new JVPTrace(main);
+  const tracersIn = zip(primals, tangents).map(
+    ([x, t]) => new JVPTracer(trace, pureArray(x), pureArray(t))
+  );
+  const out = f(...tracersIn);
+  const tracerOut = fullRaise(trace, out) as JVPTracer;
+  return [tracerOut.primal, tracerOut.tangent];
 }

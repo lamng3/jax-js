@@ -17,6 +17,11 @@ import { numpy as np } from "jax-js";
 // });
 
 test("can create array", () => {
-  const result = np.neg(np.cos(np.array([1, 2, 3])));
-  np.debugPrint(result);
+  // const result = np.neg(np.cos(np.array([1, 2, 3])));
+  // np.debugPrint(result);
+
+  const x = 3.0;
+  const [y, sinderiv] = np.jvpV1(np.sin, [x], [1.0]);
+  np.debugPrint(y);
+  np.debugPrint(sinderiv);
 });
