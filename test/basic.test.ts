@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { numpy as np } from "jax-js";
+import { deriv, numpy as np } from "jax-js";
 
 // test("x is 3", () => {
 //   expect(x).toBe(3);
@@ -16,12 +16,18 @@ import { numpy as np } from "jax-js";
 //   console.log(adapter.limits.maxVertexBufferArrayStride);
 // });
 
-test("can create array", () => {
+test("can create array", async () => {
   // const result = np.neg(np.cos(np.array([1, 2, 3])));
   // np.debugPrint(result);
 
+  // const [y, sinderiv] = np.jvpV1(np.sin, [x], [1.0]);
+  // console.log(await y.js());
+  // console.log(await sinderiv.js());
+
   const x = 3.0;
-  const [y, sinderiv] = np.jvpV1(np.sin, [x], [1.0]);
-  np.debugPrint(y);
-  np.debugPrint(sinderiv);
+
+  console.log(np.sin(x).js());
+  console.log(deriv(np.sin)(x).js());
+  console.log(deriv(deriv(np.sin))(x).js());
+  console.log(deriv(deriv(deriv(np.sin)))(x).js());
 });
