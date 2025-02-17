@@ -8,6 +8,7 @@ import {
   flatten as treeFlatten,
   unflatten as treeUnflatten,
 } from "./tree";
+import { PPrint } from "./pprint";
 
 export enum DType {
   Float32 = "float32",
@@ -807,6 +808,14 @@ export class Var {
     this.id = Var.nextId++;
     this.aval = aval;
   }
+
+  get name() {
+    return `v_${this.id}`;
+  }
+
+  toString(): string {
+    return `${this.name}:${this.aval.strShort()}`;
+  }
 }
 
 /** Literal in a Jaxpr expression. */
@@ -827,18 +836,70 @@ export class Lit {
 export type Atom = Var | Lit;
 
 /** A single statement / binding in a Jaxpr, in ANF form. */
-export type JaxprEqn = {
-  primitive: Primitive;
-  inputs: Atom[];
-  params: Record<string, any>;
-  outBinders: Var[];
-};
+export class JaxprEqn {
+  constructor(
+    readonly primitive: Primitive,
+    readonly inputs: Atom[],
+    readonly params: Record<string, any>,
+    readonly outBinders: Var[]
+  ) {}
 
-export type Jaxpr = {
-  inBinders: Var[];
-  eqns: JaxprEqn[];
-  outs: Atom[];
-};
+  pprint(): PPrint {
+    const lhs = PPrint.pp(this.outBinders.join(" "));
+    let rhs = PPrint.pp(this.primitive);
+    // pprint params
+    const paramsList = Object.entries(this.params).map(([k, v]) =>
+      PPrint.pp(`${k}=${v}`)
+    );
+    if (paramsList.length > 0) {
+      rhs = rhs
+        .stack(PPrint.pp(" [ "))
+        .stack(PPrint.prototype.concat(...paramsList))
+        .stack(PPrint.pp(" ] "));
+    } else {
+      rhs = rhs.stack(PPrint.pp(" "));
+    }
+    // pprint inputs (vars and literals)
+    rhs = rhs.stack(
+      PPrint.pp(
+        this.inputs
+          .map((x) => (x instanceof Var ? x.name : JSON.stringify(x.val.js())))
+          .join(" ")
+      )
+    );
+    return lhs.stack(PPrint.pp(" = ")).stack(rhs);
+  }
+
+  toString(): string {
+    return this.pprint().toString();
+  }
+}
+
+export class Jaxpr {
+  constructor(
+    readonly inBinders: Var[],
+    readonly eqns: JaxprEqn[],
+    readonly outs: Atom[]
+  ) {}
+
+  pprint(): PPrint {
+    const inBinders = this.inBinders.map((v) => v.toString()).join(", ");
+    const eqns = PPrint.prototype.concat(...this.eqns.map((e) => e.pprint()));
+    const outs = this.outs
+      .map((x) => (x instanceof Var ? x.name : x.val.js()))
+      .join(", ");
+    return PPrint.pp(`{ lambda ${inBinders} .`).stack(
+      PPrint.pp("let ")
+        .stack(eqns)
+        .concat(PPrint.pp(`in ( ${outs} ) }`))
+        .indent(2)
+    );
+  }
+
+  toString(): string {
+    return this.pprint().toString();
+  }
+}
 
 export class JaxprType {
   constructor(
@@ -973,12 +1034,14 @@ class JaxprTrace extends Trace {
     const outTracers = avalsOut.map((aval) =>
       this.builder.newTracer(this, aval)
     );
-    this.builder.addEqn({
-      primitive,
-      inputs: tracers.map((t) => this.builder.getVar(t)),
-      params,
-      outBinders: outTracers.map((t) => this.builder.addVar(t)),
-    });
+    this.builder.addEqn(
+      new JaxprEqn(
+        primitive,
+        tracers.map((t) => this.builder.getVar(t)),
+        params,
+        outTracers.map((t) => this.builder.addVar(t))
+      )
+    );
     return outTracers;
   }
 
@@ -1038,7 +1101,7 @@ class JaxprBuilder {
     const t2v = this.getVar.bind(this); // Maps tracer to value.
     const inBinders = [...constVars, ...inTracers.map(t2v)];
     const outVars = outTracers.map(t2v);
-    let jaxpr: Jaxpr = { inBinders, eqns: this.eqns, outs: outVars };
+    let jaxpr = new Jaxpr(inBinders, this.eqns, outVars);
 
     // Inline any scalar constants as Lit and remove from the input list.
     typecheckJaxpr(jaxpr);
@@ -1061,18 +1124,21 @@ function _inlineLiterals(jaxpr: Jaxpr, consts: Array[]): [Jaxpr, Array[]] {
     }
   }
 
-  const newEqns: JaxprEqn[] = jaxpr.eqns.map((eqn) => ({
-    primitive: eqn.primitive,
-    inputs: eqn.inputs.map((x) => literals.get(x) ?? x),
-    params: eqn.params,
-    outBinders: eqn.outBinders,
-  }));
+  const newEqns: JaxprEqn[] = jaxpr.eqns.map(
+    (eqn) =>
+      new JaxprEqn(
+        eqn.primitive,
+        eqn.inputs.map((x) => literals.get(x) ?? x),
+        eqn.params,
+        eqn.outBinders
+      )
+  );
   const newOuts = jaxpr.outs.map((x) => literals.get(x) ?? x);
-  const newJaxpr: Jaxpr = {
-    inBinders: [...constBinders, ...jaxpr.inBinders.slice(consts.length)],
-    eqns: newEqns,
-    outs: newOuts,
-  };
+  const newJaxpr = new Jaxpr(
+    [...constBinders, ...jaxpr.inBinders.slice(consts.length)],
+    newEqns,
+    newOuts
+  );
   typecheckJaxpr(newJaxpr); // Double-check for sanity.
   return [newJaxpr, newConsts];
 }
