@@ -14,12 +14,15 @@ suite("jax.makeJaxpr()", () => {
 
   test("tracks a unary function", () => {
     const { jaxpr, consts } = makeJaxpr((x: np.Array) => np.mul(x.add(2), x))(
-      np.array(2)
+      np.array([
+        [2, 4, 10],
+        [1, 1, 1],
+      ])
     );
     expect(jaxpr.toString()).toMatchInlineSnapshot(`
-      "{ lambda v_1:float32[] .
-        let v_3:float32[] = add v_1 2
-            v_4:float32[] = mul v_3 v_1
+      "{ lambda v_1:float32[2,3] .
+        let v_3:float32[2,3] = add v_1 2
+            v_4:float32[2,3] = mul v_3 v_1
         in ( v_4 ) }"
     `);
     expect(consts).toEqual([]);
