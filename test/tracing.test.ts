@@ -1,5 +1,5 @@
 import { expect, suite, test } from "vitest";
-import { numpy as np, makeJaxpr, jvp, linearize } from "jax-js";
+import { numpy as np, makeJaxpr, jvp, linearize, vjp, grad } from "jax-js";
 
 suite("jax.makeJaxpr()", () => {
   test("tracks a nullary function", () => {
@@ -76,5 +76,24 @@ suite("jax.linearize()", () => {
     const { r1: r1Dot, r2: r2Dot } = lin({ a: 1, b: 0 });
     expect(r1Dot).toBeAllclose(2);
     expect(r2Dot).toBeAllclose(0);
+  });
+});
+
+suite("jax.vjp()", () => {
+  test("works for scalars", () => {
+    const [y, backward] = vjp(np.sin, 3);
+    expect(y).toBeAllclose(np.sin(3));
+    expect(backward(1)[0]).toBeAllclose(np.cos(3));
+  });
+});
+
+suite("jax.grad()", () => {
+  test("works for a simple scalar function", () => {
+    const f = (x: np.Array) => x.mul(x).mul(x); // d/dx (x^3) = 3x^2
+    const df = grad(f);
+    expect(df(4)).toBeAllclose(48);
+    expect(df(5)).toBeAllclose(75);
+    expect(df(0)).toBeAllclose(0);
+    expect(df(-4)).toBeAllclose(48);
   });
 });

@@ -416,7 +416,11 @@ const implRules: Record<Primitive, ImplRule> = {
 
 function zerosLike(val: TracerValue): Array {
   const aval = getAval(val);
-  return new Array(tf.zeros(aval.shape, aval.dtype));
+  return zeros(aval.shape, aval.dtype);
+}
+
+function zeros(shape: number[], dtype: DType): Array {
+  return new Array(tf.zeros(shape, dtype));
 }
 
 class JVPTracer extends Tracer {
@@ -498,6 +502,7 @@ const jvpRules: Partial<Record<Primitive, JvpRule>> = {
     const outPrimal = less(x, y);
     return [[outPrimal], [zerosLike(outPrimal)]];
   },
+  // TODO: transpose, broadcast
 };
 
 function jvpFlat(
@@ -524,7 +529,7 @@ export function jvp(
   const [primalsFlat, inTree] = treeFlatten(primals);
   const [tangentsFlat, inTree2] = treeFlatten(tangents);
   if (!inTree.equals(inTree2)) {
-    throw new TypeError("Mismatched tree structures in jvp");
+    throw new TreeMismatchError("jvp", inTree, inTree2);
   }
 
   const [flatFun, outTree] = flattenFun(f, inTree);
@@ -540,6 +545,12 @@ export function jvp(
   const primalsOut = treeUnflatten(outTree.value, primalsOutFlat);
   const tangentsOut = treeUnflatten(outTree.value, tangentsOutFlat);
   return [primalsOut, tangentsOut];
+}
+
+class TreeMismatchError extends TypeError {
+  constructor(where: string, left: JsTreeDef, right: JsTreeDef) {
+    super(`Mismatched tree structures in ${where}: ${left} != ${right}`);
+  }
 }
 
 function flattenFun(
@@ -797,7 +808,7 @@ export function vmap(
     const [argsFlat, inTree] = treeFlatten(args);
     const [inAxesFlat, inTree2] = treeFlatten(inAxes);
     if (!inTree.equals(inTree2)) {
-      throw new TypeError("Mismatched tree structures in vmap");
+      throw new TreeMismatchError("vmap", inTree, inTree2);
     }
     const [fFlat, outTree] = flattenFun(f, inTree);
     const outsFlat = vmapFlat(fFlat, inAxesFlat, argsFlat);
@@ -899,6 +910,7 @@ export class JaxprEqn {
   }
 }
 
+/** Typed intermediate representation for traced computations. */
 export class Jaxpr {
   constructor(
     readonly inBinders: Var[],
@@ -1333,10 +1345,17 @@ function partialEvalFlat(
   return { jaxpr, pvalsOut, consts };
 }
 
-function linearizeFlat(
+/**
+ * Helper function with shared Jaxpr logic between linearize and vjp.
+ *
+ * Internally, vjp() looks very similar to linearize() but returns a function
+ * evaluating the "transposed" linearized Jaxpr, pulling back cotangents instead
+ * of pushing forward tangents.
+ */
+function linearizeFlatUtil(
   f: (...args: any[]) => any,
   primalsIn: Tracer[]
-): [Tracer[], (...args: any[]) => any] {
+): { primalsOut: Tracer[]; jaxpr: Jaxpr; consts: Tracer[] } {
   const pvalsIn = [
     ...primalsIn.map(PartialVal.known),
     ...primalsIn.map((t) => PartialVal.unknown(t.aval)),
@@ -1355,6 +1374,14 @@ function linearizeFlat(
     );
   }
   const primalsOut = primalPvals.map((pval) => pval.val!);
+  return { primalsOut, jaxpr, consts };
+}
+
+function linearizeFlat(
+  f: (...args: any[]) => any,
+  primalsIn: Tracer[]
+): [Tracer[], (...args: any[]) => any] {
+  const { primalsOut, jaxpr, consts } = linearizeFlatUtil(f, primalsIn);
   const fLin = (...tangents: Tracer[]) =>
     evalJaxpr(jaxpr, [...consts, ...tangents]);
   return [primalsOut, fLin];
@@ -1377,7 +1404,7 @@ export function linearize(
   const fLin = (...tangentsIn: any[]) => {
     const [tangentsInFlat, inTree2] = treeFlatten(tangentsIn);
     if (!inTree.equals(inTree2)) {
-      throw new TypeError("Mismatched tree structures in linearize");
+      throw new TreeMismatchError("linearize", inTree, inTree2);
     }
     const tangentsOutFlat = fLinFlat(...tangentsInFlat.map(pureArray));
     return treeUnflatten(outTree.value!, tangentsOutFlat);
@@ -1553,4 +1580,188 @@ function partialEvalGraphToJaxpr(
   const jaxpr = new Jaxpr(inBinders, eqns, outVars);
   typecheckJaxpr(jaxpr); // sanity check
   return { jaxpr, consts };
+}
+
+// implementation of vjp and grad
+
+/** Marker type for pullback, used by transpose rules. */
+class UndefPrimal {
+  readonly aval: ShapedArray;
+
+  constructor(aval: AbstractValue) {
+    this.aval = ShapedArray.fromAval(aval);
+  }
+}
+
+/**
+ * Evaluate the backward pass over a linearized Jaxpr (pullback of cotangents).
+ *
+ * Will raise a TypeError if the provided Jaxpr is not a linear function of its,
+ * inputs, as general expressions cannot be transposed.
+ */
+function evalJaxprTransposed(
+  jaxpr: Jaxpr,
+  args: (Tracer | UndefPrimal)[],
+  cotangents: Tracer[]
+): Tracer[] {
+  const knownPrimals = new Map<Var, Tracer>();
+  for (let i = 0; i < jaxpr.inBinders.length; i++) {
+    if (!(args[i] instanceof UndefPrimal)) {
+      knownPrimals.set(jaxpr.inBinders[i], args[i] as Tracer);
+    }
+  }
+
+  const ctStore = new Map<Var, Tracer>();
+
+  const readCotangent = (v: Var) => {
+    const ct = ctStore.get(v);
+    if (ct) {
+      // We should read a cotangent at most once, as an out binder.
+      ctStore.delete(v);
+      return ct;
+    } else {
+      return zeros(v.aval.shape, v.aval.dtype);
+    }
+  };
+
+  const writeCotangent = (v: Var, ct: Tracer | null) => {
+    if (ct !== null) {
+      const oldCt = ctStore.get(v);
+      // May need to accumulate cotangents if used in multiple JaxprEqns.
+      if (oldCt) ctStore.set(v, add(oldCt, ct));
+      else ctStore.set(v, ct);
+    }
+  };
+
+  for (let i = 0; i < jaxpr.outs.length; i++) {
+    const v = jaxpr.outs[i];
+    if (v instanceof Var) writeCotangent(v, cotangents[i]);
+  }
+
+  for (let i = jaxpr.eqns.length - 1; i >= 0; i--) {
+    const eqn = jaxpr.eqns[i];
+    // Inputs are primalsIn and cotangentsOut, outputs are cotangentsIn. We're
+    // using the known primal values to _pull back_  cotangents for unknown
+    // values. Tricky!
+    const primalsIn = eqn.inputs.map((v) =>
+      v instanceof Lit
+        ? v.val
+        : (knownPrimals.get(v) ?? new UndefPrimal(v.aval))
+    );
+    const cotangentsOut = eqn.outBinders.map(readCotangent);
+    const rule = transposeRules[eqn.primitive];
+    if (!rule) {
+      throw new TypeError(`Backward pass not implemented for ${eqn.primitive}`);
+    }
+    const cotangentsIn = rule(cotangentsOut, primalsIn, eqn.params);
+    for (let j = 0; j < jaxpr.inBinders.length; j++) {
+      const v = eqn.inputs[j];
+      if (v instanceof Var && !knownPrimals.has(v)) {
+        writeCotangent(v, cotangentsIn[j]);
+      }
+    }
+  }
+
+  const results: Tracer[] = [];
+  for (let i = 0; i < jaxpr.inBinders.length; i++) {
+    if (args[i] instanceof UndefPrimal) {
+      results.push(readCotangent(jaxpr.inBinders[i]));
+    }
+  }
+  return results;
+}
+
+class NonlinearError extends TypeError {
+  constructor(primitive: Primitive) {
+    super(`Nonlinear operation in backward pass for ${primitive}`);
+  }
+}
+
+type TransposeRule = (
+  cotangents: Tracer[],
+  primals: (Tracer | UndefPrimal)[],
+  params: any
+) => (Tracer | null)[];
+
+const transposeRules: Partial<Record<Primitive, TransposeRule>> = {
+  [Primitive.Mul]([ct], [x, y]) {
+    if (x instanceof UndefPrimal === y instanceof UndefPrimal)
+      throw new NonlinearError(Primitive.Mul);
+    return x instanceof UndefPrimal
+      ? [mul(ct, y as Tracer), null]
+      : [null, mul(x as Tracer, ct)];
+  },
+  [Primitive.Neg]([ct], [x]) {
+    if (!(x instanceof UndefPrimal)) throw new NonlinearError(Primitive.Neg);
+    return [neg(ct)];
+  },
+  [Primitive.Add]([ct], [x, y]) {
+    if (!(x instanceof UndefPrimal || y instanceof UndefPrimal))
+      throw new NonlinearError(Primitive.Add);
+    return [ct, ct];
+  },
+  [Primitive.ReduceSum]([ct], [x], { axis }) {
+    if (!(x instanceof UndefPrimal))
+      throw new NonlinearError(Primitive.ReduceSum);
+    return [broadcast(ct, x.aval.shape, axis)];
+  },
+  // TODO: transpose, broadcast
+};
+
+function vjpFlat(
+  f: (...x: Tracer[]) => Tracer[],
+  primalsIn: Tracer[]
+): [Tracer[], (...cotangents: Tracer[]) => Tracer[]] {
+  const { primalsOut, jaxpr, consts } = linearizeFlatUtil(f, primalsIn);
+  const transposeInputs = [
+    ...consts,
+    // Explcitly list which arguments should be transposed.
+    ...primalsIn.map((t) => new UndefPrimal(t.aval)),
+  ];
+  // Pullback cotangents to the UndefPrimal transpose inputs.
+  const fVjp = (...cotangents: Tracer[]) =>
+    evalJaxprTransposed(jaxpr, transposeInputs, cotangents);
+  return [primalsOut, fVjp];
+}
+
+export function vjp(
+  f: (...primals: any) => any,
+  ...primalsIn: any
+): [any, (...cotangents: any) => any] {
+  const [primalsInFlat, inTree] = treeFlatten(primalsIn);
+  const [fFlat, outTree] = flattenFun(f, inTree);
+  const [primalsOutFlat, fVjpFlat] = vjpFlat(
+    fFlat,
+    primalsInFlat.map(pureArray)
+  );
+  if (outTree.value === undefined) {
+    throw new Error("outTree was not set in vjp");
+  }
+  const primalsOut = treeUnflatten(outTree.value, primalsOutFlat);
+
+  // "cotangentsOut" because pullback
+  const fVjp = (cotangentsOut: any) => {
+    const [cotangentsOutFlat, outTree2] = treeFlatten(cotangentsOut);
+    if (!outTree.value!.equals(outTree2)) {
+      throw new TreeMismatchError("vjp", outTree.value!, outTree2);
+    }
+    const cotangentsInFlat = fVjpFlat(...cotangentsOutFlat.map(pureArray));
+    return treeUnflatten(inTree, cotangentsInFlat);
+  };
+
+  return [primalsOut, fVjp];
+}
+
+export function grad(f: (...primals: any) => Tracer) {
+  return (...x: any) => {
+    const [y, fVjp] = vjp(f, ...x);
+    if (!(y instanceof Tracer) || ndim(y) !== 0) {
+      throw new TypeError("grad requires a scalar output");
+    }
+    if (y.aval.dtype !== DType.Float32) {
+      throw new TypeError("grad currently only supports float32");
+    }
+    // JAX convention, differentiate with respect to the first argument.
+    return fVjp(pureArray(1))[0];
+  };
 }

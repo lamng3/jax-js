@@ -60,3 +60,22 @@ export const linearize = core.linearize as <
   ReturnType<F>,
   (...tangents: MapJsTree<Parameters<F>, Array, ArrayLike>) => ReturnType<F>,
 ];
+
+/** Calculate the reverse-mode vector-Jacobian product for a function. */
+export const vjp = core.vjp as <F extends (...args: any[]) => JsTree<Array>>(
+  f: WithArgsSubtype<F, JsTree<ArrayLike>>,
+  ...primals: MapJsTree<Parameters<F>, Array, ArrayLike>
+) => [
+  ReturnType<F>,
+  (cotangents: MapJsTree<ReturnType<F>, Array, ArrayLike>) => Parameters<F>,
+];
+
+/**
+ * Compute the gradient of a scalar-valued function `f` with respect to its
+ * first argument.
+ */
+export const grad = core.grad as <F extends (...args: any[]) => JsTree<Array>>(
+  f: WithArgsSubtype<F, JsTree<ArrayLike>>
+) => (
+  ...primals: MapJsTree<Parameters<F>, Array, ArrayLike>
+) => MapJsTree<Parameters<F>[0], ArrayLike, Array>;
