@@ -9,7 +9,10 @@
   onMount(async () => {
     monaco = (await import("$lib/monaco")).default;
 
-    editor = monaco.editor.create(containerEl, { fontSize: 14 });
+    editor = monaco.editor.create(containerEl, {
+      fontSize: 14,
+      automaticLayout: true,
+    });
     const model = monaco.editor.createModel(
       `import { grad, numpy as np } from "@jax-js/core";
 
