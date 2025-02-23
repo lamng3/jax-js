@@ -2,9 +2,6 @@
   import { SplitPane } from "@rich_harris/svelte-split-pane";
   import type { Plugin } from "@rollup/browser";
   import { ArrowRightIcon, PaletteIcon, PlayIcon } from "lucide-svelte";
-  import { format } from "prettier";
-  import * as prettierParserTypescript from "prettier/parser-typescript";
-  import * as prettierPluginEstree from "prettier/plugins/estree";
 
   import ReplEditor from "$lib/repl/ReplEditor.svelte";
   import { jaxSrc } from "$lib/jax-js-source";
@@ -47,6 +44,10 @@ const y = np.dot(X, np.array([1, 2])).add(3);
   let replEditor: ReplEditor;
 
   async function handleFormat() {
+    const { format } = await import("prettier");
+    const prettierParserTypescript = await import("prettier/parser-typescript");
+    const prettierPluginEstree = await import("prettier/plugins/estree");
+
     const code = replEditor.getText();
     try {
       const formattedCode = await format(code, {
@@ -126,14 +127,20 @@ const y = np.dot(X, np.array([1, 2])).add(3);
 </script>
 
 <div class="h-dvh">
-  <SplitPane type="horizontal" pos="288px" min="240px" max="40%">
+  <SplitPane
+    type="horizontal"
+    pos="288px"
+    min="240px"
+    max="40%"
+    --color="var(--color-gray-200)"
+  >
     {#snippet a()}
       <div class="shrink-0 bg-gray-50 px-4 py-4">
         <h1 class="text-xl font-light mb-4">
           <a href="/"><span class="font-medium">jax-js</span> REPL</a>
         </h1>
 
-        <hr class="mb-6 border-gray-300" />
+        <hr class="mb-6 border-gray-200" />
 
         <p class="text-sm mb-4">
           Try out jax-js. Machine learning and numerical computing on the web!
@@ -170,10 +177,10 @@ const y = np.dot(X, np.array([1, 2])).add(3);
     {#snippet b()}
       <SplitPane
         type="vertical"
-        pos="-120px"
-        min="400px"
-        max="40px"
-        --color="black"
+        pos="-200px"
+        min="33%"
+        max="-64px"
+        --color="var(--color-gray-200)"
       >
         {#snippet a()}
           <div class="flex flex-col min-w-0">

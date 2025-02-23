@@ -28,6 +28,7 @@
       "typescript",
       monaco.Uri.parse("file:///main.ts"),
     );
+    model.updateOptions({ tabSize: 2 });
     editor.setModel(model);
   });
 
