@@ -3,5 +3,7 @@ build/
 dist/
 .svelte-kit/
 
+.vscode/
+
 # Test files from vitest
 __screenshots__/
