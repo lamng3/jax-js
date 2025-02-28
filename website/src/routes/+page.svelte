@@ -51,9 +51,9 @@
     >
     is carefully hand-optimized, including a JIT compiler and scheduler for GPU kernels.
     But it's also
-    <strong>extremely simple and portable across the web</strong>, running on
-    Chrome, Firefox, Safari, iOS, and Android. On each platform, the compiler
-    generates specialized kernels on a variety of hardware.
+    <strong>extremely simple and portable</strong>, running on Chrome, Firefox,
+    Safari, iOS, and Android. On each platform, the compiler generates
+    specialized kernels for a variety of hardware.
   </p>
 
   <div class="mb-5 border h-48 flex items-center justify-center square-grid">
@@ -66,7 +66,8 @@
   <p class="mb-5">
     How is this possible? In short: because of modern technologies like
     WebAssembly, WebGL, and WebGPU that give us low-level access to hardware, as
-    ML models also become smaller and faster.
+    ML models also become smaller and faster. It still won't be quite as fast as
+    native code, but it's lightweight and easy to use.
   </p>
 
   <p class="mb-5">
