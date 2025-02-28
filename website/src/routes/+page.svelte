@@ -1,3 +1,7 @@
+<script lang="ts">
+  import { base } from "$app/paths";
+</script>
+
 <main class="mx-auto my-12 px-4 sm:px-6 max-w-screen-md">
   <div class="mb-10">
     <h1 class="text-6xl text-center font-bold mb-4">jax-js</h1>
@@ -65,7 +69,7 @@
 
   <p>
     Try it in the
-    <a href="/repl" class="link">jax-js REPL</a>.
+    <a href="{base}/repl" class="link">jax-js REPL</a>.
   </p>
 </main>
 
