@@ -5,6 +5,7 @@
     "lib": ["ES2023", "DOM"],
     "module": "ESNext",
     "moduleResolution": "node",
+    "allowJs": true,
     "paths": {
       "@jax-js/core": ["."]
     },
