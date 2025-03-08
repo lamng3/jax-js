@@ -6,7 +6,7 @@ import "@tensorflow/tfjs-core/dist/register_all_gradients";
 import "@tensorflow/tfjs-backend-cpu";
 import "@tensorflow/tfjs-backend-webgl";
 import "@tensorflow/tfjs-backend-webgpu";
-import { deepEqual, range, toposort, unzip2, zip } from "./utils";
+import { DEBUG, deepEqual, range, toposort, unzip2, zip } from "./utils";
 import {
   JsTreeDef,
   flatten as treeFlatten,
@@ -322,7 +322,9 @@ function bind(
   const topTrace = findTopTrace(args);
   const tracers = args.map((arg) => fullRaise(topTrace, arg));
   const outs = topTrace.processPrimitive(prim, tracers, params);
-  // console.info(`processing rule for ${prim} on ${tracers} and got ${outs}`);
+  if (DEBUG) {
+    console.info(`processing rule for ${prim} on ${tracers} and got ${outs}`);
+  }
   return outs.map((out) => out.fullLower());
 }
 
@@ -515,7 +517,6 @@ function jvpFlat(
   tangents: TracerValue[],
 ): [Tracer[], Tracer[]] {
   using main = newMain(JVPTrace);
-  // console.info("creating new jvp main", traceStack);
   const trace = new JVPTrace(main);
   const tracersIn = zip(primals, tangents).map(
     ([x, t]) => new JVPTracer(trace, pureArray(x), pureArray(t)),
@@ -788,7 +789,6 @@ function vmapFlat(
   let valsOut: Tracer[], bdimsOut: (number | null)[];
   {
     using main = newMain(BatchTrace, axisSize);
-    // console.info("creating new vmap main", traceStack);
     const trace = new BatchTrace(main);
     const tracersIn = args.map((x, i) =>
       inAxes[i] === null

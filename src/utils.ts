@@ -1,5 +1,7 @@
 /** @file Generic programming utilities with no dependencies on library code. */
 
+export const DEBUG: boolean = false;
+
 export function unzip2<T, U>(pairs: Iterable<[T, U]>): [T[], U[]] {
   const lst1: T[] = [];
   const lst2: U[] = [];
