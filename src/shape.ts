@@ -11,8 +11,10 @@
  *
  * Indexing into a `ShapeTracker` or `View` can be folded into shader code.
  *
- * This file is originally based on tinygrad's implementation of shape tracking
- * in the `tinygrad.shape` module.
+ * Originally based on tinygrad's implementation of shape tracking in the
+ * `tinygrad.shape` module. But this version is simplified a bit. I'm not really
+ * trying to innovate on shape tracking in this library, so if I have doubts on
+ * something, it'll just be copied from tinygrad (with comments :D).
  */
 
 import { deepEqual, rep, zip } from "./utils";
@@ -40,6 +42,11 @@ function defaultStrides(shape: number[]): number[] {
 /**
  * A multidimensional view into memory. An array can be thought of as the
  * combination of a linear buffer of memory, along with a `View`.
+ *
+ * Formula for getting a data point is basically:
+ *   1. Check if ∀i. 0 <= dim[i] < shape[i], otherwise out of bounds.
+ *   2. If mask exists, and ∃i. dim[i] ∉ mask[i], return 0.
+ *   2. Otherwise, look at this memory address: offset + ∑(strides[i] * dim[i]).
  */
 class View {
   private constructor(
@@ -125,6 +132,9 @@ class View {
    * return `null` instead.
    *
    * If composable, return a combined view with the same shape as `v1`.
+   *
+   * This is very tricky. The shapes of v1 and v2 may be different, and in that
+   * case, we do some math to figure out whether they're compatible.
    */
   compose(v1: View): View | null {
     const v2 = this;
@@ -136,8 +146,8 @@ class View {
         if (ret !== null) return ret;
       }
     }
+    // Normalize out any masks in v1, applying them afterward.
     if (v1.mask !== null) {
-      // Normalize out any masks in v1, applying them afterward.
       const newV1 = v1.shrink(v1.mask);
       const merged = v2.compose(newV1);
       return merged
@@ -146,10 +156,119 @@ class View {
     }
 
     // Project offset and strides.
+    //  - origin: the unravelled offset of v1 in v2
+    //  - terms: a list of [dim, stride] pairs for each dimension of v2, where
+    //    the stride is offset in v2 for one index of that dim of v1.
+    //  - strides: the new strides for v1, reduced from terms
+
     let origin = unravel(v2.shape, v1.offset); // v1 applies after v2
     let terms: [number, number][][] = rep(v2.shape.length, () => []);
     const strides = rep(v1.shape.length, 0);
-    // TODO
+    for (let d1 = 0; d1 < v1.strides.length; d1++) {
+      const st = v1.strides[d1];
+      if (st === 0) {
+        continue;
+      }
+      const unravelOffset = unravel(v2.shape, v1.offset + st);
+      // compare new unravel with origin
+      for (let d2 = 0; d2 < v2.shape.length; d2++) {
+        const o = origin[d2];
+        const diff = unravelOffset[d2] - o;
+        if (diff === 0) {
+          continue;
+        }
+        terms[d2].push([d1, diff]);
+        strides[d1] += diff * v2.strides[d2];
+      }
+    }
+
+    // Merge dimensions in v2 if required.
+    // This is helpful in cases where the shape of v1 doesn't match that of v2
+    // in a concise way, so we need to figure out which dimensions in v2 are
+    // joined together. Sometimes this may not be possible.
+    let [mergedSize, mergedTermMin, mergedTermMax] = [1, 0, 0];
+    const extents: [number, number, number][] = []; // size, vmin, vmax
+    for (let i = v2.shape.length - 1; i >= 0; i--) {
+      const term = terms[i]; // list of [dim in v1, stride in v2.shape[i]]
+      const s = v2.shape[i];
+      // Figure out the min and max value of this dimension in v2.
+      let [tmin, tmax] = [origin[i], origin[i]];
+      for (const [d1, s1] of term) {
+        if (s1 > 0) tmax += (v1.shape[d1] - 1) * s1;
+        else if (s1 < 0) tmin += (v1.shape[d1] - 1) * s1;
+      }
+      mergedTermMin += tmin * mergedSize;
+      mergedTermMax += tmax * mergedSize;
+      mergedSize *= s;
+      // Only keep this dimension if the term doesn't exceed array bounds.
+      if (mergedTermMin >= 0 && mergedTermMax < mergedSize) {
+        extents.push([mergedSize, mergedTermMin, mergedTermMax]);
+        [mergedSize, mergedTermMin, mergedTermMax] = [1, 0, 0];
+      }
+    }
+    // Unmerged dimensions => invalid, it goes past array bounds.
+    if (mergedTermMin !== 0 || mergedTermMax !== 0) return null;
+    extents.reverse();
+
+    const v2Shape = extents.map(([s]) => s);
+    if (!deepEqual(v2Shape, v2.shape)) {
+      const reshapedV2 = v2.reshape(v2Shape);
+      if (reshapedV2 === null) return null;
+      // NOTE: Unclear why this conditional is needed? Original says it prevents infinite loop.
+      if (!deepEqual(reshapedV2.shape, v2.shape)) return reshapedV2.compose(v1);
+    }
+
+    // If v2 has a mask, let's try to project it onto v1
+    if (v2.mask !== null) {
+      const newB = rep(v1.shape.length, 0);
+      const newE = v1.shape.slice();
+      let bad = false;
+
+      for (let d2 = 0; d2 < v2.shape.length; d2++) {
+        const [b, e] = v2.mask[d2];
+        const o = origin[d2];
+        const term = terms[d2];
+        const [_, tmin, tmax] = extents[d2];
+        if (b <= tmin && tmax < e) continue; // v1 doesn't reach outside the mask
+        if (term.length !== 1) {
+          // otherwise, v1 reaches outside the mask...
+          if (term.length === 0 && newE.length) newE[0] = 0;
+          else bad = true; // ...and it has two or more terms, so the mask is violated
+        } else {
+          const [d1, s1] = term[0]; // changes in d1 -> changes in d2, by s1
+          newB[d1] = Math.max(
+            newB[d1],
+            Math.ceil((s1 > 0 ? b - o : e - o - 1) / s1),
+          );
+          newE[d1] = Math.min(
+            newE[d1],
+            Math.floor((s1 < 0 ? b - o : e - o - 1) / s1) + 1,
+          );
+        }
+      }
+
+      // If any of v1 was masked off, try again with that mask in place.
+      for (let d1 = 0; d1 < v1.shape.length; d1++) {
+        if (newB[d1] !== 0 || newE[d1] !== v1.shape[d1]) {
+          return v2.compose(
+            View.create(v1.shape, v1.strides, v1.offset, zip(newB, newE)),
+          );
+        }
+      }
+
+      // Otherwise, if v2's mask was violated, we can't merge :(
+      // Note: I don't know why this is below the previous line, but whatever.
+      if (bad) return null;
+    }
+
+    // Final offset is v2.offset plus sum of origin*d2 strides.
+    let finalOffset = v2.offset;
+    for (let d2 = 0; d2 < v2.shape.length; d2++) {
+      finalOffset += origin[d2] * v2.strides[d2];
+    }
+
+    // Return the composed view (no mask, see normalization at the beginning).
+    return View.create(v1.shape, strides, finalOffset, null);
   }
 
   /** Reshape the view into a new shape. */
