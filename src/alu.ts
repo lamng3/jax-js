@@ -110,6 +110,18 @@ export class AluExp {
       }
     }
 
+    if (AluGroup.Unary.has(this.op)) {
+      const x = this.src[0].evaluate(context, globals);
+      switch (this.op) {
+        case AluOp.Sin:
+          return Math.sin(x);
+        case AluOp.Cos:
+          return Math.cos(x);
+        default:
+          throw new Error(`Missing implemementation for ${this.op}`);
+      }
+    }
+
     switch (this.op) {
       case AluOp.Where:
         return this.src[0].evaluate(context, globals)

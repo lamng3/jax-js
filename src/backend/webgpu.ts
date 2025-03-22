@@ -1,5 +1,5 @@
+import { AluExp, AluGroup, AluOp, DType } from "../alu";
 import { Backend, Slot, SlotError } from "../backend";
-import { ShapeTracker } from "../shape";
 import { DEBUG } from "../utils";
 
 /** Implementation of `Backend` that uses WebGPU in browsers. */
@@ -9,7 +9,7 @@ export class WebGPUBackend implements Backend {
   nextSlot: number;
 
   constructor(readonly device: GPUDevice) {
-    if (DEBUG) {
+    if (DEBUG >= 3) {
       console.info(
         "webgpu adapter:",
         device.adapterInfo.vendor,
@@ -82,28 +82,20 @@ export class WebGPUBackend implements Backend {
     throw new Error("readSync() not implemented for WebGPU");
   }
 
-  async execute(
-    op: BackendOp,
-    inputs: Slot[],
-    shapes: ShapeTracker[],
-    outputs: Slot[],
-  ): Promise<void> {
+  async execute(exp: AluExp, inputs: Slot[], outputs: Slot[]): Promise<void> {
     const inputBuffers = inputs.map((slot) => this.#getBuffer(slot));
     const outputBuffers = outputs.map((slot) => this.#getBuffer(slot));
-    const pipeline = await this.pipelines.get(pipelineSource(op));
-    pipelineSubmit(op, this.device, pipeline, inputBuffers, outputBuffers);
+    const nargs = inputs.length;
+    const pipeline = await this.pipelines.get(pipelineSource(nargs, exp));
+    pipelineSubmit(this.device, pipeline, inputBuffers, outputBuffers);
   }
 
-  executeSync(
-    op: BackendOp,
-    inputs: Slot[],
-    shapes: ShapeTracker[],
-    outputs: Slot[],
-  ): void {
+  executeSync(exp: AluExp, inputs: Slot[], outputs: Slot[]): void {
     const inputBuffers = inputs.map((slot) => this.#getBuffer(slot));
     const outputBuffers = outputs.map((slot) => this.#getBuffer(slot));
-    const pipeline = this.pipelines.getSync(pipelineSource(op));
-    pipelineSubmit(op, this.device, pipeline, inputBuffers, outputBuffers);
+    const nargs = inputs.length;
+    const pipeline = this.pipelines.getSync(pipelineSource(nargs, exp));
+    pipelineSubmit(this.device, pipeline, inputBuffers, outputBuffers);
   }
 
   #getBuffer(slot: Slot): GPUBuffer {
@@ -142,51 +134,149 @@ export class WebGPUBackend implements Backend {
   }
 }
 
-function pipelineSource(op: BackendOp) {
-  switch (op) {
-    case BackendOp.Add:
-      return `
-@group(0) @binding(0) var<storage, read> arrayA : array<f32>;
-@group(0) @binding(1) var<storage, read> arrayB : array<f32>;
-@group(0) @binding(2) var<storage, read_write> result : array<f32>;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) id : vec3<u32>) {
-  if (id.x < arrayLength(&arrayA)) {
-    result[id.x] = arrayA[id.x] + arrayB[id.x];
-  }
-}`;
-    case BackendOp.Mul:
-      return `
-@group(0) @binding(0) var<storage, read> arrayA : array<f32>;
-@group(0) @binding(1) var<storage, read> arrayB : array<f32>;
-@group(0) @binding(2) var<storage, read_write> result : array<f32>;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) id : vec3<u32>) {
-  if (id.x < arrayLength(&arrayA)) {
-    result[id.x] = arrayA[id.x] * arrayB[id.x];
-  }
-}`;
+function dtypeToWgsl(dtype: DType): string {
+  switch (dtype) {
+    case DType.Bool:
+      return "bool";
+    case DType.Int32:
+      return "i32";
+    case DType.Float32:
+      return "f32";
     default:
-      throw new Error(`Unknown operation: ${op}`);
+      throw new Error(`Unsupported dtype: ${dtype}`);
   }
 }
 
+function constToWgsl(dtype: DType, value: any): string {
+  if (dtype === DType.Bool) return value ? "true" : "false";
+  if (dtype === DType.Int32) return value.toString();
+  if (dtype === DType.Float32) {
+    let s = value.toString();
+    if (!s.includes(".")) s += ".0";
+    return s;
+  }
+  throw new Error(`Unsupported const dtype: ${dtype}`);
+}
+
+/** Compiles an expression into WebGPU shader source code. */
+function pipelineSource(nargs: number, exp: AluExp): string {
+  const args = Array.from({ length: nargs }, (_, i) => `in${i}`);
+
+  // binding(0): uniforms
+  // binding(1..n): input buffers
+  // binding(n+1): output buffer
+
+  const kernel: string[] = []; // line-separated
+  kernel.push(
+    "struct Uniforms {",
+    "  len: u32,",
+    "};",
+    "@group(0) @binding(0) var<uniform> uniforms : Uniforms;",
+  );
+
+  for (let i = 0; i < nargs; i++) {
+    kernel.push(
+      `@group(0) @binding(${i + 1}) var<storage, read> ${args[i]} : array<f32>;`,
+    );
+  }
+  kernel.push(
+    `@group(0) @binding(${nargs + 1}) var<storage, read_write> result : array<f32>;`,
+  );
+
+  kernel.push(
+    "\n@compute @workgroup_size(64)",
+    "fn main(@builtin(global_invocation_id) id : vec3<u32>) {",
+    "  if (id.x >= uniforms.len) { return; }",
+    "  let gidx: i32 = i32(id.x);",
+  );
+
+  // Generate code for each AluExp operation.
+  // Some expressions may be used twice, so we keep track of them.
+  let gensymCount = 0;
+  const gensym = () => `alu${gensymCount++}`;
+
+  const expToVar = new Map<AluExp, string>();
+  const gen = (exp: AluExp): string => {
+    if (expToVar.has(exp)) return expToVar.get(exp)!;
+    const { op, src, dtype, arg } = exp;
+
+    // Some of these cases early `return` to inline it.
+    let source = "";
+    if (AluGroup.Binary.has(op) || AluGroup.Compare.has(op)) {
+      const a = gen(src[0]);
+      const b = gen(src[1]);
+      if (op === AluOp.Add) source = `${a} + ${b}`;
+      else if (op === AluOp.Sub) source = `${a} - ${b}`;
+      else if (op === AluOp.Mul) source = `${a} * ${b}`;
+      else if (op === AluOp.Idiv)
+        source = dtype === DType.Int32 ? `${a} / ${b}` : `floor(${a} / ${b})`;
+      else if (op === AluOp.Mod) source = `${a} % ${b}`;
+      else if (op === AluOp.Cmplt) source = `${a} < ${b}`;
+      else if (op === AluOp.Cmpne) source = `${a} != ${b}`;
+    } else if (AluGroup.Unary.has(op)) {
+      const a = gen(src[0]);
+      if (op === AluOp.Sin) source = `sin(${a})`;
+      else if (op === AluOp.Cos) source = `cos(${a})`;
+    } else if (op === AluOp.Where) {
+      // select(f, t, cond) -> cond ? t : f
+      source = `select(${gen(src[2])}, ${gen(src[1])}, ${gen(src[0])})`;
+    } else if (op === AluOp.Const) {
+      return constToWgsl(dtype, arg);
+    } else if (op === AluOp.Special) {
+      return arg[0] as string;
+    } else if (op === AluOp.GlobalIndex) {
+      source = `${args[arg]}[${gen(src[0])}]`;
+    }
+
+    if (!source) throw new Error(`Missing impl for op: ${op}`);
+    const typeName = dtypeToWgsl(dtype);
+    const name = gensym();
+    expToVar.set(exp, name);
+    kernel.push(`  let ${name}: ${typeName} = ${source};`);
+    return name;
+  };
+
+  kernel.push(`  result[gidx] = ${gen(exp)};`, "}");
+  return kernel.join("\n");
+}
+
 function pipelineSubmit(
-  op: BackendOp,
   device: GPUDevice,
   pipeline: GPUComputePipeline,
   inputs: GPUBuffer[],
   outputs: GPUBuffer[],
 ) {
-  // TODO: Needs to support other ops later.
+  if (
+    inputs.length + outputs.length >
+    device.limits.maxStorageBuffersPerShaderStage
+  ) {
+    // This is a hard limit in WebGPU. All platforms have at least 8 storage
+    // buffers per shader stage, and >99% support 10. If you pass more than this
+    // many inputs then you risk running into this limit.
+    const actual = inputs.length + outputs.length;
+    const max = device.limits.maxStorageBuffersPerShaderStage;
+    throw new Error(
+      `Too many buffers (${actual}) for WebGPU pipeline (max: ${max})`,
+    );
+  }
+
+  const len = outputs[0].size;
+  const uniform = device.createBuffer({
+    size: 4, // bytes
+    usage: GPUBufferUsage.UNIFORM,
+    mappedAtCreation: true,
+  });
+  new Uint32Array(uniform.getMappedRange()).set([len]);
+  uniform.unmap();
+
   const bindGroup = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: [
-      { binding: 0, resource: { buffer: inputs[0] } },
-      { binding: 1, resource: { buffer: inputs[1] } },
-      { binding: 2, resource: { buffer: outputs[0] } },
+      { binding: 0, resource: { buffer: uniform } },
+      ...inputs.map((buffer, i) => {
+        return { binding: i + 1, resource: { buffer } };
+      }),
+      { binding: inputs.length + 1, resource: { buffer: outputs[0] } },
     ],
   });
 
@@ -221,10 +311,12 @@ class ShaderPipelineCache {
     if (existingPipeline) {
       return existingPipeline;
     }
-
     const existingPromise = this.inProgress.get(code);
     if (existingPromise) {
       return await existingPromise;
+    }
+    if (DEBUG >= 2) {
+      console.info("=========== WebGPU shader ===========\n" + code);
     }
 
     const shaderModule = this.device.createShaderModule({ code });
@@ -244,7 +336,8 @@ class ShaderPipelineCache {
         // This can race with other compilations, but it shouldn't happen in
         // correct code. Any validation error here is a bug in `jax-js`.
         const scope = await this.device.popErrorScope();
-        throw new Error(`Failed to compile shader: ${scope?.message}\n${code}`);
+        const emsg = await compileError(shaderModule, scope, code);
+        throw new Error(emsg);
       }
     })();
     this.inProgress.set(code, promise);
@@ -261,6 +354,9 @@ class ShaderPipelineCache {
     if (existingPipeline) {
       return existingPipeline;
     }
+    if (DEBUG >= 2) {
+      console.info("=========== WebGPU shader ===========\n" + code);
+    }
 
     const shaderModule = this.device.createShaderModule({ code });
     this.device.pushErrorScope("validation");
@@ -271,15 +367,33 @@ class ShaderPipelineCache {
         entryPoint: "main",
       },
     });
-    this.device.popErrorScope().then((scope) => {
+    this.device.popErrorScope().then(async (scope) => {
       // This happens asynchronously, so we can't throw here. But shader syntax
       // validation errors should never occur in correct code. Any issues here
       // reflect bugs in jax-js.
       if (scope !== null) {
-        console.error(`Failed to compile shader: ${scope.message}\n${code}`);
+        const emsg = await compileError(shaderModule, scope, code);
+        console.error(emsg);
       }
     });
     this.cache.set(code, pipeline);
     return pipeline;
   }
+}
+
+/** Gather information about a compilation error and format it. */
+async function compileError(
+  shaderModule: GPUShaderModule,
+  scope: GPUError | null,
+  code: string,
+): Promise<string> {
+  let message = `Failed to compile shader: ${scope ? scope.message : "(no error scope)"}`;
+  const info = await shaderModule.getCompilationInfo();
+  for (const msg of info.messages) {
+    message += `\n  [${msg.type} at ${msg.lineNum}:${msg.linePos}] ${msg.message}`;
+  }
+  if (code) {
+    message += `\n\n${code}`;
+  }
+  return message;
 }

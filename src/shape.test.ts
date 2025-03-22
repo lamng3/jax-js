@@ -369,7 +369,6 @@ suite("toAluExp()", () => {
     // ....
     st = st.reshape([16]);
     // .....10..32.....
-    console.log(st);
 
     const [exp, vexp] = st.toAluExp([AluExp.special(DType.Int32, "x", 16)]);
     expect(exp.evaluate({ x: 5 })).toEqual(1);
