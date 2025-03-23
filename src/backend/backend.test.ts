@@ -17,16 +17,16 @@ describe.each(["cpu", "webgpu"])("Backend '%s'", (backendName) => {
     try {
       const gidx = AluExp.special(DType.Int32, "gidx", 3);
       const arg1 = accessorAlu(0, shape, gidx);
-      const arg2 = accessorAlu(1, shape, gidx);
+      const arg2 = accessorAlu(1, shape.flip([true]), gidx);
 
       await backend.execute(AluExp.mul(arg1, arg2), [a, b], [c]);
 
       const buf = await backend.read(c);
-      expect(new Float32Array(buf)).toEqual(new Float32Array([4, 10, 18]));
+      expect(new Float32Array(buf)).toEqual(new Float32Array([6, 10, 12]));
 
       await backend.execute(AluExp.add(arg1, arg2), [a, b], [c]);
       const buf2 = await backend.read(c);
-      expect(new Float32Array(buf2)).toEqual(new Float32Array([5, 7, 9]));
+      expect(new Float32Array(buf2)).toEqual(new Float32Array([7, 7, 7]));
     } finally {
       backend.decRef(a);
       backend.decRef(b);
