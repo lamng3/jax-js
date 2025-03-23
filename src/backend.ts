@@ -51,7 +51,12 @@ export interface Backend {
   readSync(slot: Slot, start?: number, count?: number): ArrayBuffer;
 
   /** Run a backend operation. */
-  execute(exp: AluExp, inputs: Slot[], outputs: Slot[]): Promise<void>;
+  execute(
+    exp: AluExp,
+    inputs: Slot[],
+    outputs: Slot[],
+    abort?: AbortSignal,
+  ): Promise<void>;
 
   /** Run a backend operation, blocking variant. */
   executeSync(exp: AluExp, inputs: Slot[], outputs: Slot[]): void;

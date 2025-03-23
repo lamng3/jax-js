@@ -82,11 +82,17 @@ export class WebGPUBackend implements Backend {
     throw new Error("readSync() not implemented for WebGPU");
   }
 
-  async execute(exp: AluExp, inputs: Slot[], outputs: Slot[]): Promise<void> {
+  async execute(
+    exp: AluExp,
+    inputs: Slot[],
+    outputs: Slot[],
+    abort?: AbortSignal,
+  ): Promise<void> {
     const inputBuffers = inputs.map((slot) => this.#getBuffer(slot));
     const outputBuffers = outputs.map((slot) => this.#getBuffer(slot));
     const nargs = inputs.length;
     const pipeline = await this.pipelines.get(pipelineSource(nargs, exp));
+    if (abort?.aborted) return; // Do not submit if already aborted.
     pipelineSubmit(this.device, pipeline, inputBuffers, outputBuffers);
   }
 
