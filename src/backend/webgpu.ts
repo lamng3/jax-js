@@ -202,16 +202,24 @@ function pipelineSource(nargs: number, exp: AluExp): string {
   let gensymCount = 0;
   const gensym = () => `alu${gensymCount++}`;
 
+  const usedArgs = Array.from({ length: nargs }, () => false);
   const references = new Map<AluExp, number>();
   const seen = new Set<AluExp>();
   const countReferences = (exp: AluExp) => {
     references.set(exp, (references.get(exp) ?? 0) + 1);
+    if (exp.op === AluOp.GlobalIndex) usedArgs[exp.arg] = true;
     if (!seen.has(exp)) {
       seen.add(exp);
       for (const src of exp.src) countReferences(src);
     }
   };
   countReferences(exp);
+
+  // Insert phony assignments for inputs that are not in use.
+  // https://github.com/gpuweb/gpuweb/discussions/4582#discussioncomment-9146686
+  for (let i = 0; i < args.length; i++) {
+    if (!usedArgs[i]) kernel.push(`  _ = &${args[i]};`);
+  }
 
   const expContext = new Map<AluExp, string>();
   const gen = (exp: AluExp): string => {
@@ -235,6 +243,7 @@ function pipelineSource(nargs: number, exp: AluExp): string {
       const a = gen(src[0]);
       if (op === AluOp.Sin) source = `sin(${a})`;
       else if (op === AluOp.Cos) source = `cos(${a})`;
+      else if (op === AluOp.Cast) source = `${dtypeToWgsl(dtype)}(${a})`;
     } else if (op === AluOp.Where) {
       // select(f, t, cond) -> cond ? t : f
       source = `select(${gen(src[2])}, ${gen(src[1])}, ${gen(src[0])})`;

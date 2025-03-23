@@ -37,6 +37,10 @@ export class AluExp {
   static mod(a: AluExp, b: AluExp): AluExp {
     return new AluExp(AluOp.Mod, a.dtype, [a, b]);
   }
+  static cast(dtype: DType, a: AluExp): AluExp {
+    if (a.dtype === dtype) return a;
+    return new AluExp(AluOp.Cast, dtype, [a]);
+  }
   static cmplt(a: AluExp, b: AluExp): AluExp {
     return new AluExp(AluOp.Cmplt, DType.Bool, [a, b]);
   }
@@ -174,6 +178,11 @@ export class AluExp {
           return Math.sin(x);
         case AluOp.Cos:
           return Math.cos(x);
+        case AluOp.Cast:
+          if (this.dtype === DType.Int32) return Math.floor(Number(x));
+          else if (this.dtype === DType.Float32) return Number(x);
+          else if (this.dtype === DType.Bool) return Boolean(x);
+          else throw new Error(`Unsupported cast to ${this.dtype}`);
         default:
           throw new Error(`Missing implemementation for ${this.op}`);
       }
@@ -201,24 +210,25 @@ export class AluExp {
 
 /** Symbolic form for each mathematical operation. */
 export enum AluOp {
-  Add,
-  Sub,
-  Mul,
-  Idiv,
-  Mod,
-  Sin,
-  Cos,
-  Cmplt,
-  Cmpne,
-  Where,
-  Const, // arg = value
-  Special, // arg = [variable, n]
-  GlobalIndex, // arg = gid; src = [bufidx]
+  Add = "Add",
+  Sub = "Sub",
+  Mul = "Mul",
+  Idiv = "Idiv",
+  Mod = "Mod",
+  Sin = "Sin",
+  Cos = "Cos",
+  Cast = "Cast",
+  Cmplt = "Cmplt",
+  Cmpne = "Cmpne",
+  Where = "Where",
+  Const = "Const", // arg = value
+  Special = "Special", // arg = [variable, n]
+  GlobalIndex = "GlobalIndex", // arg = gid; src = [bufidx]
 }
 
 export const AluGroup = {
   Binary: new Set([AluOp.Add, AluOp.Sub, AluOp.Mul, AluOp.Idiv, AluOp.Mod]),
-  Unary: new Set([AluOp.Sin, AluOp.Cos]),
+  Unary: new Set([AluOp.Sin, AluOp.Cos, AluOp.Cast]),
   Compare: new Set([AluOp.Cmplt, AluOp.Cmpne]),
   Variable: new Set([AluOp.Special, AluOp.GlobalIndex]),
 };
