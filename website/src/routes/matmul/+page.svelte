@@ -377,6 +377,139 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
     }
   }
 
+  class Unroll4x2Strategy extends GpuStrategy {
+    name: string;
+    bx: number;
+    by: number;
+
+    constructor(bx: number, by: number) {
+      super();
+      this.name = `unroll4x2-${bx}-${by}`;
+      this.bx = bx;
+      this.by = by;
+    }
+
+    kernel() {
+      return `
+@group(0) @binding(0) var<storage, read> A : array<f32>;
+@group(0) @binding(1) var<storage, read> B : array<f32>;
+@group(0) @binding(2) var<storage, read_write> C : array<f32>;
+
+// Define the dimensions for the square matrices.
+const DIM : u32 = ${n}u;
+
+// Helper function for reading from matrix A (row-major order).
+fn mm_readA(row: u32, col: u32) -> f32 {
+  return A[row * DIM + col];
+}
+
+// Helper function for reading from matrix B (row-major order).
+fn mm_readB(row: u32, col: u32) -> f32 {
+  return B[row * DIM + col];
+}
+
+// Helper function for writing to matrix C.
+fn mm_write(row: u32, col: u32, value: f32) {
+  C[row * DIM + col] = value;
+}
+
+@compute @workgroup_size(${this.bx}, ${this.by}, 1)
+fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
+  // Each thread computes a 4x4 block.
+  let base_row: u32 = global_id.y * 4u;
+  let base_col: u32 = global_id.x * 4u;
+
+  // Bounds check (if DIM is not a multiple of 4 you may need extra checks).
+  if (base_row >= DIM || base_col >= DIM) {
+    return;
+  }
+
+  // Initialize the 4x4 accumulators.
+  var sum00: f32 = 0.0; var sum01: f32 = 0.0; var sum02: f32 = 0.0; var sum03: f32 = 0.0;
+  var sum10: f32 = 0.0; var sum11: f32 = 0.0; var sum12: f32 = 0.0; var sum13: f32 = 0.0;
+  var sum20: f32 = 0.0; var sum21: f32 = 0.0; var sum22: f32 = 0.0; var sum23: f32 = 0.0;
+  var sum30: f32 = 0.0; var sum31: f32 = 0.0; var sum32: f32 = 0.0; var sum33: f32 = 0.0;
+
+  // Loop over the k dimension, unrolled by 2.
+  for (var k: u32 = 0u; k < DIM; k = k + 2u) {
+    // Load two elements from A for each row of the 4x4 block.
+    let a0_0: f32 = mm_readA(base_row + 0u, k + 0u);
+    let a0_1: f32 = mm_readA(base_row + 0u, k + 1u);
+
+    let a1_0: f32 = mm_readA(base_row + 1u, k + 0u);
+    let a1_1: f32 = mm_readA(base_row + 1u, k + 1u);
+
+    let a2_0: f32 = mm_readA(base_row + 2u, k + 0u);
+    let a2_1: f32 = mm_readA(base_row + 2u, k + 1u);
+
+    let a3_0: f32 = mm_readA(base_row + 3u, k + 0u);
+    let a3_1: f32 = mm_readA(base_row + 3u, k + 1u);
+
+    // Load two elements from B for each column of the 4x4 block.
+    let b0_0: f32 = mm_readB(k + 0u, base_col + 0u);
+    let b0_1: f32 = mm_readB(k + 0u, base_col + 1u);
+    let b0_2: f32 = mm_readB(k + 0u, base_col + 2u);
+    let b0_3: f32 = mm_readB(k + 0u, base_col + 3u);
+
+    let b1_0: f32 = mm_readB(k + 1u, base_col + 0u);
+    let b1_1: f32 = mm_readB(k + 1u, base_col + 1u);
+    let b1_2: f32 = mm_readB(k + 1u, base_col + 2u);
+    let b1_3: f32 = mm_readB(k + 1u, base_col + 3u);
+
+    // Unrolled accumulator updates: row 0.
+    sum00 = sum00 + a0_0 * b0_0 + a0_1 * b1_0;
+    sum01 = sum01 + a0_0 * b0_1 + a0_1 * b1_1;
+    sum02 = sum02 + a0_0 * b0_2 + a0_1 * b1_2;
+    sum03 = sum03 + a0_0 * b0_3 + a0_1 * b1_3;
+
+    // Row 1.
+    sum10 = sum10 + a1_0 * b0_0 + a1_1 * b1_0;
+    sum11 = sum11 + a1_0 * b0_1 + a1_1 * b1_1;
+    sum12 = sum12 + a1_0 * b0_2 + a1_1 * b1_2;
+    sum13 = sum13 + a1_0 * b0_3 + a1_1 * b1_3;
+
+    // Row 2.
+    sum20 = sum20 + a2_0 * b0_0 + a2_1 * b1_0;
+    sum21 = sum21 + a2_0 * b0_1 + a2_1 * b1_1;
+    sum22 = sum22 + a2_0 * b0_2 + a2_1 * b1_2;
+    sum23 = sum23 + a2_0 * b0_3 + a2_1 * b1_3;
+
+    // Row 3.
+    sum30 = sum30 + a3_0 * b0_0 + a3_1 * b1_0;
+    sum31 = sum31 + a3_0 * b0_1 + a3_1 * b1_1;
+    sum32 = sum32 + a3_0 * b0_2 + a3_1 * b1_2;
+    sum33 = sum33 + a3_0 * b0_3 + a3_1 * b1_3;
+  }
+
+  // Write out the computed 4x4 block to matrix C.
+  mm_write(base_row + 0u, base_col + 0u, sum00);
+  mm_write(base_row + 0u, base_col + 1u, sum01);
+  mm_write(base_row + 0u, base_col + 2u, sum02);
+  mm_write(base_row + 0u, base_col + 3u, sum03);
+
+  mm_write(base_row + 1u, base_col + 0u, sum10);
+  mm_write(base_row + 1u, base_col + 1u, sum11);
+  mm_write(base_row + 1u, base_col + 2u, sum12);
+  mm_write(base_row + 1u, base_col + 3u, sum13);
+
+  mm_write(base_row + 2u, base_col + 0u, sum20);
+  mm_write(base_row + 2u, base_col + 1u, sum21);
+  mm_write(base_row + 2u, base_col + 2u, sum22);
+  mm_write(base_row + 2u, base_col + 3u, sum23);
+
+  mm_write(base_row + 3u, base_col + 0u, sum30);
+  mm_write(base_row + 3u, base_col + 1u, sum31);
+  mm_write(base_row + 3u, base_col + 2u, sum32);
+  mm_write(base_row + 3u, base_col + 3u, sum33);
+}
+`;
+    }
+
+    workgroups(): [number, number, number] {
+      return [n / this.bx, n / this.by, 1];
+    }
+  }
+
   class Unroll4x4Strategy extends GpuStrategy {
     name: string;
     bx: number;
@@ -558,6 +691,9 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
     new Unroll4Strategy(8, 8),
     new Unroll4Strategy(8, 16),
     new Unroll4Strategy(16, 16),
+    new Unroll4x2Strategy(8, 8),
+    new Unroll4x2Strategy(8, 16),
+    new Unroll4x2Strategy(16, 16),
     new Unroll4x4Strategy(8, 8),
     new Unroll4x4Strategy(8, 16),
     new Unroll4x4Strategy(16, 16),
@@ -580,7 +716,7 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
     Running a few different WebGPU matmul programs on {n}x{n} matrices.
   </p>
 
-  <div class="flex gap-x-4 mb-4">
+  <div class="flex flex-wrap gap-x-4 gap-y-2 mb-4">
     {#each strategiesList as strategy (strategy.name)}
       <button
         class="border px-2 hover:bg-gray-100 active:scale-95"
