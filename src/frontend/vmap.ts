@@ -9,8 +9,6 @@ import {
   cos,
   flattenFun,
   fullRaise,
-  jvp,
-  moveaxis,
   mul,
   ndim,
   neg,
@@ -24,13 +22,26 @@ import {
   Tracer,
   TracerValue,
   TreeMismatchError,
+  transpose,
 } from "./core";
 import { flatten as treeFlatten, unflatten as treeUnflatten } from "../tree";
+import { jvp } from "./jvp";
+
+const JsArray = globalThis.Array;
 
 function mappedAval(batchDim: number, aval: AbstractValue) {
   const shape = [...aval.shape];
   shape.splice(batchDim, 1);
   return new ShapedArray(shape, aval.dtype);
+}
+
+/** Move one axis to a different index. */
+export function moveaxis(x: TracerValue, src: number, dst: number) {
+  const t = pureArray(x);
+  const perm = [...JsArray(t.shape.length).keys()];
+  perm.splice(src, 1);
+  perm.splice(dst, 0, src);
+  return transpose(t, perm);
 }
 
 function moveBatchAxis(

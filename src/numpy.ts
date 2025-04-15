@@ -3,6 +3,7 @@ import * as tf from "@tensorflow/tfjs-core";
 import { DType } from "./alu";
 import { Array } from "./frontend/core";
 import * as core from "./frontend/core";
+import * as vmapModule from "./frontend/vmap";
 import { deepEqual } from "./utils";
 
 export { Array, DType };
@@ -40,7 +41,7 @@ export const reduceSum = core.reduceSum as (
   x: ArrayLike,
   axis?: number | number[],
 ) => Array;
-export const moveaxis = core.moveaxis as (
+export const moveaxis = vmapModule.moveaxis as (
   x: ArrayLike,
   src: number,
   dst: number,

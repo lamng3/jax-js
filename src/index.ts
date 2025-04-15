@@ -1,4 +1,7 @@
 import * as core from "./frontend/core";
+import * as jaxprModule from "./frontend/jaxpr";
+import * as jvpModule from "./frontend/jvp";
+import * as linearizeModule from "./frontend/linearize";
 import * as vmapModule from "./frontend/vmap";
 import * as numpy from "./numpy";
 import { Array, ArrayLike } from "./numpy";
@@ -21,7 +24,9 @@ type WithArgsSubtype<F extends (args: any[]) => any, T> =
   Parameters<F> extends T ? F : never;
 
 /** Compute the forward-mode Jacobian-vector product for a function. */
-export const jvp = core.jvp as <F extends (...args: any[]) => JsTree<Array>>(
+export const jvp = jvpModule.jvp as <
+  F extends (...args: any[]) => JsTree<Array>,
+>(
   f: WithArgsSubtype<F, JsTree<ArrayLike>>,
   primals: MapJsTree<Parameters<F>, Array, ArrayLike>,
   tangents: MapJsTree<Parameters<F>, Array, ArrayLike>,
@@ -42,12 +47,12 @@ export const jacfwd = vmapModule.jacfwd as <F extends (x: Array) => Array>(
 ) => F;
 
 /** Construct a Jaxpr by dynamically tracing a function with example inputs. */
-export const makeJaxpr = core.makeJaxpr as unknown as <
+export const makeJaxpr = jaxprModule.makeJaxpr as unknown as <
   F extends (...args: any[]) => JsTree<Array>,
 >(
   f: WithArgsSubtype<F, JsTree<ArrayLike>>,
 ) => (...args: Parameters<F>) => {
-  jaxpr: core.Jaxpr;
+  jaxpr: jaxprModule.Jaxpr;
   consts: Array[];
   treedef: JsTreeDef;
 };
@@ -56,7 +61,7 @@ export const makeJaxpr = core.makeJaxpr as unknown as <
  * Produce a local linear approximation to a function at a point using jvp() and
  * partial evaluation.
  */
-export const linearize = core.linearize as <
+export const linearize = linearizeModule.linearize as <
   F extends (...args: any[]) => JsTree<Array>,
 >(
   f: WithArgsSubtype<F, JsTree<ArrayLike>>,
@@ -67,7 +72,9 @@ export const linearize = core.linearize as <
 ];
 
 /** Calculate the reverse-mode vector-Jacobian product for a function. */
-export const vjp = core.vjp as <F extends (...args: any[]) => JsTree<Array>>(
+export const vjp = linearizeModule.vjp as <
+  F extends (...args: any[]) => JsTree<Array>,
+>(
   f: WithArgsSubtype<F, JsTree<ArrayLike>>,
   ...primals: MapJsTree<Parameters<F>, Array, ArrayLike>
 ) => [
@@ -81,7 +88,9 @@ export const vjp = core.vjp as <F extends (...args: any[]) => JsTree<Array>>(
  * Compute the gradient of a scalar-valued function `f` with respect to its
  * first argument.
  */
-export const grad = core.grad as <F extends (...args: any[]) => JsTree<Array>>(
+export const grad = linearizeModule.grad as <
+  F extends (...args: any[]) => JsTree<Array>,
+>(
   f: WithArgsSubtype<F, JsTree<ArrayLike>>,
 ) => (
   ...primals: MapJsTree<Parameters<F>, Array, ArrayLike>
