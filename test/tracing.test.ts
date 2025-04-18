@@ -16,8 +16,7 @@ suite("jax.makeJaxpr()", () => {
     const { jaxpr, consts } = makeJaxpr(() => np.mul(2, 2))();
     expect(jaxpr.toString()).toMatchInlineSnapshot(`
       "{ lambda  .
-        let
-        in ( 4 ) }"
+        ( 4 ) }"
     `);
     expect(consts).toEqual([]);
   });

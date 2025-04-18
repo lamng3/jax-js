@@ -138,10 +138,12 @@ export class Jaxpr {
       .map((x) => (x instanceof Var ? x.name : x.val.js()))
       .join(", ");
     return PPrint.pp(`{ lambda ${inBinders} .`).concat(
-      PPrint.pp("let ")
-        .stack(eqns)
-        .concat(PPrint.pp(`in ( ${outs} ) }`))
-        .indent(2),
+      (this.eqns.length
+        ? PPrint.pp("let ")
+            .stack(eqns)
+            .concat(PPrint.pp(`in ( ${outs} ) }`))
+        : PPrint.pp(`( ${outs} ) }`)
+      ).indent(2),
     );
   }
 
