@@ -339,8 +339,8 @@ export class Reduction {
     readonly op: AluOp,
     /** Size of the reduction axis. */
     readonly size: number,
-    /** Follow-up expression defined with the "reduced" variable, defaults to identity. */
-    readonly fusion: AluExp = AluExp.variable(dtype, "reduced"),
+    /** Follow-up expression defined with the "acc" variable, defaults to identity. */
+    readonly fusion: AluExp = AluExp.variable(dtype, "acc"),
   ) {
     if (!AluGroup.Reduce.has(op)) {
       throw new TypeError(`Unsupported reduction: ${op}`);

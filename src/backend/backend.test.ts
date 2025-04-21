@@ -121,14 +121,28 @@ describe.each(backendTypes)("Backend '%s'", (backendType) => {
         AluExp.globalIndex(DType.Float32, 0, index),
         AluExp.f32(0),
       ); // accessor where columns are reduced
-      const reduction = new Reduction(DType.Float32, AluOp.Add, 2);
-      const kernel = new Kernel(1, 3, exp, reduction);
+      let reduction = new Reduction(DType.Float32, AluOp.Add, 2);
+      let kernel = new Kernel(1, 3, exp, reduction);
 
       const exe = backend.prepareSync(kernel);
       backend.dispatch(exe, [a], [output]);
 
       const buf = backend.readSync(output);
       expect(new Float32Array(buf)).toEqual(new Float32Array([2, 5, 12]));
+
+      // Try a reduction with fused +1.
+      reduction = new Reduction(
+        DType.Float32,
+        AluOp.Add,
+        2,
+        AluExp.add(AluExp.variable(DType.Float32, "acc"), AluExp.f32(1)),
+      );
+      kernel = new Kernel(1, 3, exp, reduction);
+      const exe2 = backend.prepareSync(kernel);
+      backend.dispatch(exe2, [a], [output]);
+
+      const buf2 = backend.readSync(output);
+      expect(new Float32Array(buf2)).toEqual(new Float32Array([3, 6, 13]));
     } finally {
       backend.decRef(a);
       backend.decRef(output);

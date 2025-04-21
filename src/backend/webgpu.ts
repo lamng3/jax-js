@@ -320,7 +320,7 @@ function pipelineSource(
     else if (re.op === AluOp.Max) emit(`acc = max(acc, ${item});`);
     else throw new Error(`Unsupported reduction op: ${re.op}`);
     emit(popIndent, "}");
-    emit(`result[gidx] = acc;`);
+    emit(`result[gidx] = ${gen(re.fusion)};`);
   }
 
   emit(popIndent, "}");
