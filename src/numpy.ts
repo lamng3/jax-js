@@ -17,12 +17,7 @@ export const complex64 = DType.Complex64;
 // current stack of interpreters. But we hide that away from users to mimic
 // JAX's composable tracing transformations.
 
-export type ArrayLike =
-  | Array
-  | RecursiveArray<number>
-  | RecursiveArray<boolean>
-  | number
-  | boolean;
+export type ArrayLike = Array | number | boolean;
 
 export const add = core.add as (x: ArrayLike, y: ArrayLike) => Array;
 export const mul = core.mul as (x: ArrayLike, y: ArrayLike) => Array;
@@ -55,8 +50,8 @@ export const ndim = core.ndim as (x: ArrayLike) => number;
 
 /** Return if two arrays are element-wise equal within a tolerance. */
 export function allclose(
-  actual: ArrayLike,
-  expected: ArrayLike,
+  actual: Parameters<typeof array>[0],
+  expected: Parameters<typeof array>[0],
   options?: { rtol?: number; atol?: number },
 ): boolean {
   const { rtol = 1e-5, atol = 1e-8 } = options ?? {};
