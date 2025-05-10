@@ -68,6 +68,10 @@ export function tuneWebgpu(kernel: Kernel): TuneResult {
   // 1. Check that kernel GlobalView ops have consistent src[], where the last
   //    dimension is reduction, and others are gidx.
   const globalViews = exp.collect((exp) => exp.op === AluOp.GlobalView);
+  if (globalViews.length === 0) {
+    if (DEBUG >= 4) console.info("Tuning: No GlobalView ops found in kernel.");
+    return tuneNullopt(kernel); // TODO: Nullary kernel, run opts for this.
+  }
   for (const gv of globalViews) {
     if (!gv.src.length || gv.src[gv.src.length - 1] !== AluVar.ridx) {
       if (DEBUG >= 4)

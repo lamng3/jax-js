@@ -1,3 +1,4 @@
+import { FpHash } from "./hash";
 import { ShapeTracker } from "./shape";
 import { clamp } from "./utils";
 
@@ -19,6 +20,7 @@ const isFloatDtype = (dtype: DType) =>
  * graph rewrite engine.
  */
 export class AluExp {
+  #hash?: bigint;
   #simplified?: AluExp;
   #range?: [number, number];
 
@@ -92,6 +94,19 @@ export class AluExp {
   }
   static bool(value: boolean): AluExp {
     return AluExp.const(DType.Bool, value);
+  }
+
+  /** Compute a reasonable expression hash with low collision rate. */
+  getHash(): bigint {
+    if (this.#hash !== undefined) return this.#hash;
+    const hasher = new FpHash();
+    hasher.update(this.op, this.dtype, JSON.stringify(this.arg));
+    hasher.update(BigInt(this.src.length));
+    for (const s of this.src) {
+      hasher.update(s.getHash());
+    }
+    this.#hash = hasher.value;
+    return this.#hash;
   }
 
   not(): AluExp {
@@ -233,15 +248,34 @@ export class AluExp {
     return this.op === AluOp.Const && this.dtype === DType.Int32;
   }
 
-  /** Simplify the expression by replacing any known patterns. */
+  /**
+   * Simplify the expression by replacing any known patterns and deduping
+   * identical subexpressions.
+   */
   simplify(): AluExp {
-    // Cache this to avoid recomputing (especially exponential blowup).
+    // Cache this to avoid recomputing if it's called twice.
     if (this.#simplified !== undefined) return this.#simplified;
-    return (this.#simplified = this.simplifyInner());
+    return (this.#simplified = this.#simplify(new Map()));
   }
 
-  simplifyInner(): AluExp {
-    const src = this.src.map((x) => x.simplify());
+  #simplify(seen: Map<bigint, AluExp>): AluExp {
+    const hash = this.getHash();
+    if (seen.has(hash)) return seen.get(hash)!;
+    const simplified = this.#simplifyInner(seen);
+    const simplifiedHash = simplified.getHash();
+    if (seen.has(simplifiedHash)) {
+      const prevSimplified = seen.get(simplifiedHash)!;
+      seen.set(hash, prevSimplified);
+      return prevSimplified;
+    } else {
+      seen.set(hash, simplified);
+      seen.set(simplifiedHash, simplified);
+      return simplified;
+    }
+  }
+
+  #simplifyInner(seen: Map<bigint, AluExp>): AluExp {
+    const src = this.src.map((x) => x.#simplify(seen));
     const { op } = this;
 
     // Folding with one item being a no-op constant.
@@ -303,7 +337,9 @@ export class AluExp {
       if (mul.src[0].op === AluOp.Mod) {
         const [x, y] = mul.src[0].src;
         if (check(x)) {
-          return AluExp.mod(mod.src[0], AluExp.mul(mod.src[1], y)).simplify();
+          return AluExp.mod(mod.src[0], AluExp.mul(mod.src[1], y)).#simplify(
+            seen,
+          );
         }
       }
     }
@@ -317,7 +353,7 @@ export class AluExp {
           if (A % B === 0) {
             let ret = numer.src[1 - i]; // x
             if (A / B !== 1) ret = AluExp.mul(ret, AluExp.i32(A / B));
-            return ret.simplify();
+            return ret.#simplify(seen);
           }
         }
         // (x * A + C) / B => x * (A / B) + floor(C / B)
@@ -332,7 +368,7 @@ export class AluExp {
               let ret = numer.src[j].src[1 - i]; // x
               if (A / B !== 1) ret = AluExp.mul(ret, AluExp.i32(A / B));
               ret = AluExp.add(ret, AluExp.idiv(numer.src[1 - j], B));
-              return ret.simplify();
+              return ret.#simplify(seen);
             }
           }
         }
