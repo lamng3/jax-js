@@ -24,11 +24,11 @@
 
 import { accessorGlobal, AluExp, AluOp, AluVar, DType, Kernel } from "./alu";
 import { ShapeTracker, unravelAlu } from "./shape";
-import { DEBUG, deepEqual } from "./utils";
+import { DEBUG, deepEqual, prod } from "./utils";
 
 // gidx = (0 ... dim.local ... dim.reduce)
-// ridx = (dim.reduce .[local index].
-//         dim.group .[reduce loops].
+// ridx = (dim.groups .[group index].
+//         dim.reduce .[reduce loop].
 //         dim.unroll .[upcast]. dim.upcast)
 // uidx = (dim.upcast .[unroll]. ...)
 // result[gidx + uidx] = <<< eval(kernel.exp) >>>;
@@ -41,13 +41,16 @@ export interface TuneResult {
    * Number of threads in a group.
    * If greater than 1, group index is available as `AluExp.special("group")`.
    */
-  group?: number;
+  groups?: number;
+
+  /** Number of iterations for the reduction loop, `AluExp.special("ridx")`. */
+  reduce: number;
 
   /** Amount to upcast in reduction, set via `AluVar.unroll`. */
   unroll?: number;
 
   /** Amount to upcast in non-reduce dimensions, set via `AluVar.upcast`. */
-  upcast?: number[];
+  upcast?: number;
 }
 
 /** Stores dimensions of the kernel's applied shape. Globals start at 0. */
@@ -55,15 +58,15 @@ class TuneDims {
   st: ShapeTracker; // Shape tracker for the optimizations.
 
   // local: number; // TODO: Split gidx -> global and local dimensions during tuning.
-  reduce: number; // Reductions start here.
-  group: number; // Single reduction thread, equal to reduce if no groups.
+  groups: number; // Reductions start here, with groups.
+  reduce: number; // Single reduction thread.
   unroll: number; // Upcast along the reduce dimension.
   upcast: number; // Upcast along output dimension.
 
   constructor(shape: number[]) {
     this.st = ShapeTracker.fromShape(shape);
+    this.groups = this.st.shape.length - 1;
     this.reduce = this.st.shape.length - 1;
-    this.group = this.st.shape.length - 1;
     this.unroll = this.st.shape.length;
     this.upcast = this.st.shape.length;
   }
@@ -86,6 +89,7 @@ export function tuneNullopt(kernel: Kernel): TuneResult {
       })
       .substitute(vars)
       .simplify(),
+    reduce: kernel.reduction ? kernel.reduction.size : 0,
   };
 }
 
@@ -123,15 +127,57 @@ export function tuneWebgpu(kernel: Kernel): TuneResult {
 
   // 3. Apply heuristic optimizations based on the shape trackers.
   const dim = new TuneDims(shape);
-
   void reduction; // TODO: Edit the `dim` object to reflect new dims.
 
   // 4. Return the tuned kernel result.
+  const indices: AluExp[] = [];
+  const addIndices = (s: number[], exp: AluExp) => {
+    if (s.length === 0) return;
+    else if (s.length === 1) indices.push(exp);
+    else indices.push(...unravelAlu(s, exp));
+  };
+  if (0 < dim.groups) {
+    const s = dim.st.shape.slice(0, dim.groups);
+    addIndices(s, AluExp.special(DType.Int32, "gidx", prod(s)));
+  }
+  if (dim.groups < dim.reduce) {
+    const s = dim.st.shape.slice(dim.groups, dim.reduce);
+    addIndices(s, AluExp.special(DType.Int32, "group", prod(s)));
+  }
+  if (dim.reduce <= dim.unroll) {
+    const s = dim.st.shape.slice(dim.reduce, dim.unroll);
+    addIndices(s, AluExp.special(DType.Int32, "ridx", prod(s)));
+  }
+  if (dim.unroll < dim.upcast) {
+    const s = dim.st.shape.slice(dim.reduce, dim.unroll);
+    addIndices(s, AluVar.unroll);
+  }
+  if (dim.upcast < dim.st.shape.length - 1) {
+    const s = dim.st.shape.slice(dim.unroll, dim.upcast);
+    addIndices(s, AluVar.upcast);
+  }
+
   const newExp = exp.rewrite((exp) => {
     if (exp.op === AluOp.GlobalView) {
-      return undefined; // TODO
+      const gid: number = exp.arg[0];
+      const st: ShapeTracker = exp.arg[1];
+      return accessorGlobal(gid, st.compose(dim.st), indices);
     }
   });
 
-  return { exp: newExp };
+  // Sanity-check that reduction size looks correct.
+  if (prod(dim.st.shape.slice(dim.groups, dim.upcast)) !== reduction.size) {
+    throw new Error(
+      `Invariant violation: reduction size ${reduction.size} does not match ` +
+        `tuned dims ${JSON.stringify(dim.st.shape.slice(dim.groups, dim.upcast))}`,
+    );
+  }
+
+  return {
+    exp: newExp,
+    groups: prod(dim.st.shape.slice(dim.groups, dim.reduce)),
+    reduce: prod(dim.st.shape.slice(dim.reduce, dim.unroll)),
+    unroll: prod(dim.st.shape.slice(dim.unroll, dim.upcast)),
+    upcast: prod(dim.st.shape.slice(dim.upcast)),
+  };
 }

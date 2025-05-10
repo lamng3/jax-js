@@ -13,6 +13,7 @@ import { ShapeTracker, unravelAlu } from "../shape";
 import {
   deepEqual,
   isPermutation,
+  prod,
   RecursiveArray,
   recursiveFlatten,
   repeat,
@@ -184,7 +185,7 @@ export class Array extends Tracer {
   reshape(shape: number[]): Array {
     const autoIdx = shape.indexOf(-1);
     if (autoIdx !== -1) {
-      const remaining = this.#st.size / shape.reduce((a, b) => a * b, -1);
+      const remaining = this.#st.size / -prod(shape);
       if (remaining % 1 !== 0 || remaining < 0) {
         throw new Error(
           `Invalid reshape: ${JSON.stringify(this.shape)} -> ${JSON.stringify(shape)}`,
@@ -334,7 +335,7 @@ export class Array extends Tracer {
     const shape = this.shape;
     const reduction = new Reduction(this.#dtype, op, shape[shape.length - 1]);
     const newShape = shape.slice(0, -1); // first n-1 axes are in the shape
-    const newSize = newShape.reduce((a, b) => a * b, 1);
+    const newSize = prod(newShape);
 
     const indices = [...unravelAlu(newShape, AluVar.gidx), AluVar.ridx];
     const [index, valid] = this.#st.toAluExp(indices);
@@ -554,7 +555,7 @@ export function array(
         cur = cur[0];
       }
     }
-    const size = shape.reduce((a, b) => a * b, 1);
+    const size = prod(shape);
     const flat = recursiveFlatten(values);
     if (flat.length !== size) {
       throw new Error(
@@ -611,7 +612,7 @@ function dataToJs(data: Float32Array, shape: number[]): RecursiveArray<number> {
     return data[0];
   }
   const [first, ...rest] = shape;
-  const restSize = rest.reduce((a, b) => a * b, 1);
+  const restSize = prod(rest);
   const ret: any[] = [];
   for (let i = 0; i < first; i++) {
     ret.push(dataToJs(data.slice(i * restSize, (i + 1) * restSize), rest));

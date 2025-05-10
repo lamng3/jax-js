@@ -609,6 +609,9 @@ export const AluVar = {
   ridx: AluExp.variable(DType.Int32, "ridx"), // reduction index
   acc: (dtype: DType) => AluExp.variable(dtype, "acc"), // accumulator
   idx: AluExp.variable(DType.Int32, "idx"), // virtual "array index"
+
+  unroll: AluExp.variable(DType.Int32, "unroll"), // unroll index, inside loop
+  upcast: AluExp.variable(DType.Int32, "upcast"), // upcast index, inside loop
 };
 
 /**

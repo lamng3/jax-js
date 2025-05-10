@@ -26,6 +26,10 @@ export function rep<T>(
   return new Array(length).fill(value);
 }
 
+export function prod(arr: number[]): number {
+  return arr.reduce((acc, x) => acc * x, 1);
+}
+
 /** Shorthand for integer division, like in Python. */
 export function idiv(a: number, b: number): number {
   return Math.floor(a / b);

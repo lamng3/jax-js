@@ -20,7 +20,7 @@
  */
 
 import { AluExp } from "./alu";
-import { deepEqual, idiv, isPermutation, rep, zip } from "./utils";
+import { deepEqual, idiv, isPermutation, prod, rep, zip } from "./utils";
 
 type Pair = [number, number];
 
@@ -226,8 +226,7 @@ export class View {
   }
 
   get size(): number {
-    if (this.#size === undefined)
-      this.#size = this.shape.reduce((a, b) => a * b, 1);
+    if (this.#size === undefined) this.#size = prod(this.shape);
     return this.#size;
   }
 
@@ -532,7 +531,7 @@ export class View {
     if (deepEqual(this.shape, newShape)) return this;
     if (newShape.some((s) => s < 0))
       throw new Error(`Reshape cannot have negative numbers ${jstr(newShape)}`);
-    if (this.size !== newShape.reduce((a, b) => a * b, 1))
+    if (this.size !== prod(newShape))
       throw new Error(`Reshape size ${jstr(this.shape)} -> ${jstr(newShape)}`);
 
     if (this.size === 0) return View.create(newShape);
@@ -620,6 +619,7 @@ export class ShapeTracker {
 
   /** Compose this shape tracker with another, applying after. */
   compose(other: ShapeTracker): ShapeTracker {
+    if (this.contiguous) return other;
     let ret: ShapeTracker = this;
     for (const v of other.views) {
       ret = new ShapeTracker(ret.views.concat(v)).simplify();
