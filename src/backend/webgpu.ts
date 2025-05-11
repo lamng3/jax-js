@@ -1,7 +1,7 @@
 import { AluExp, AluGroup, AluOp, DType, Kernel } from "../alu";
 import { Backend, BackendType, Executable, Slot, SlotError } from "../backend";
 import { tuneWebgpu } from "../tuner";
-import { DEBUG, findPow2 } from "../utils";
+import { DEBUG, findPow2, strip1 } from "../utils";
 
 type ShaderDispatch = {
   shader: string; // informational
@@ -283,18 +283,19 @@ function pipelineSource(
       } else if (op === AluOp.Idiv)
         source = dtype === DType.Int32 ? `(${a} / ${b})` : `floor(${a} / ${b})`;
       else if (op === AluOp.Mod) source = `(${a} % ${b})`;
-      else if (op === AluOp.Min) source = `min(${a}, ${b})`;
-      else if (op === AluOp.Max) source = `max(${a}, ${b})`;
+      else if (op === AluOp.Min) source = `min(${strip1(a)}, ${strip1(b)})`;
+      else if (op === AluOp.Max) source = `max(${strip1(a)}, ${strip1(b)})`;
       else if (op === AluOp.Cmplt) source = `(${a} < ${b})`;
       else if (op === AluOp.Cmpne) source = `(${a} != ${b})`;
     } else if (AluGroup.Unary.has(op)) {
       const a = gen(src[0]);
       if (op === AluOp.Sin) source = `sin(${a})`;
       else if (op === AluOp.Cos) source = `cos(${a})`;
-      else if (op === AluOp.Cast) source = `${dtypeToWgsl(dtype)}(${a})`;
+      else if (op === AluOp.Cast)
+        source = `${dtypeToWgsl(dtype)}(${strip1(a)})`;
     } else if (op === AluOp.Where) {
       // select(f, t, cond) -> cond ? t : f
-      source = `select(${gen(src[2])}, ${gen(src[1])}, ${gen(src[0])})`;
+      source = `select(${strip1(gen(src[2]))}, ${strip1(gen(src[1]))}, ${strip1(gen(src[0]))})`;
     } else if (op === AluOp.Const) {
       return constToWgsl(dtype, arg);
     } else if (op === AluOp.Special) {
@@ -302,7 +303,7 @@ function pipelineSource(
     } else if (op === AluOp.Variable) {
       return arg as string;
     } else if (op === AluOp.GlobalIndex) {
-      source = `${args[arg]}[${gen(src[0])}]`;
+      source = `${args[arg]}[${strip1(gen(src[0]))}]`;
       if (dtype === DType.Bool) source = `(${source} != 0)`; // bool is represented as i32
     }
 
@@ -311,7 +312,7 @@ function pipelineSource(
     if ((references.get(exp) ?? 0) > 1) {
       const name = gensym();
       expContext.set(exp, name);
-      emit(`let ${name}: ${typeName} = ${source};`);
+      emit(`let ${name}: ${typeName} = ${strip1(source)};`);
       return name;
     } else {
       expContext.set(exp, source);
@@ -321,7 +322,7 @@ function pipelineSource(
 
   if (!kernel.reduction) {
     countReferences(tune.exp);
-    let rhs = gen(tune.exp);
+    let rhs = strip1(gen(tune.exp));
     if (resultTy !== dtypeToWgsl(tune.exp.dtype)) rhs = `${resultTy}(${rhs})`;
     emit(`result[gidx] = ${rhs};`);
   } else {
@@ -355,9 +356,8 @@ function pipelineSource(
       countReferences(exps[i]);
     }
 
-    // After references are counted, we can start generating code.
-    const items = exps.map(gen);
-
+    // After references are counted, we can generate the code.
+    const items = exps.map(gen).map(strip1);
     for (let i = 0; i < upcast; i++) {
       if (re.op === AluOp.Add) emit(`${acc[i]} += ${items[i]};`);
       else if (re.op === AluOp.Mul) emit(`${acc[i]} *= ${items[i]};`);
@@ -369,7 +369,7 @@ function pipelineSource(
     }
     emit(popIndent, "}");
 
-    // After exiting the scope, erase any local variables.
+    // Exited the reduction loop scope. Erase any local variables.
     expContext.clear();
     references.clear();
     seen.clear();
@@ -388,8 +388,8 @@ function pipelineSource(
       countReferences(fusionExps[i]);
     }
     for (let i = 0; i < upcast; i++) {
-      const index = gen(outputIdxExps[i]);
-      let rhs = gen(fusionExps[i]);
+      const index = strip1(gen(outputIdxExps[i]));
+      let rhs = strip1(gen(fusionExps[i]));
       if (resultTy !== dtypeToWgsl(fusionExps[i].dtype))
         rhs = `${resultTy}(${rhs})`;
       emit(`result[${index}] = ${rhs};`);

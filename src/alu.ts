@@ -1,6 +1,6 @@
 import { FpHash } from "./hash";
 import { ShapeTracker } from "./shape";
-import { clamp } from "./utils";
+import { clamp, strip1 } from "./utils";
 
 export enum DType {
   Float32 = "float32",
@@ -568,13 +568,13 @@ export class AluExp {
         }
 
         case AluOp.GlobalIndex:
-          return `G_${node.arg}<${node.dtype}>[${parts[0]}]`;
+          return `G_${node.arg}<${node.dtype}>[${strip1(parts[0])}]`;
 
         case AluOp.GlobalView: {
           const [gid, st] = node.arg as [number, ShapeTracker];
           const shape = st.shape.join(",");
           const cont = st.contiguous ? "c" : "nc";
-          return `GV_${gid}<${node.dtype}>{${shape}${cont ? "" : "*"}}[${parts.join(", ")}]`;
+          return `GV_${gid}<${node.dtype}>{${shape}${cont ? "" : "*"}}[${parts.map(strip1).join(", ")}]`;
         }
       }
 
@@ -588,13 +588,13 @@ export class AluExp {
 
       /* unary ops with pretty names ­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­ */
       if (UNARY_SYM[node.op]) {
-        return `${UNARY_SYM[node.op]!}(${parts[0]})`;
+        return `${UNARY_SYM[node.op]!}${parts[0]}`;
       }
       if (node.op === AluOp.Cast) {
-        return `Cast<${node.dtype}>(${parts[0]})`;
+        return `Cast<${node.dtype}>(${strip1(parts[0])})`;
       }
 
-      return `${node.op}(${parts.join(", ")})`;
+      return `${node.op}(${parts.map(strip1).join(", ")})`;
     });
   }
 

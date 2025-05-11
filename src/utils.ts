@@ -166,3 +166,11 @@ export function recursiveFlatten<T>(ar: RecursiveArray<T>): T[] {
   if (!Array.isArray(ar)) return [ar];
   return (ar as any).flat(Infinity); // Escape infinite type depth
 }
+
+/** Strip an outermost pair of nested parentheses from an expression, if any. */
+export function strip1(str: string): string {
+  if (str[0] === "(" && str[str.length - 1] === ")") {
+    return str.slice(1, -1);
+  }
+  return str;
+}
