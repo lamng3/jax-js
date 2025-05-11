@@ -108,12 +108,11 @@ export function diag(v: ArrayLike, k = 0): Array {
   if (!Number.isInteger(k))
     throw new TypeError(`k must be an integer, got ${k}`);
   if (a.ndim === 1) {
-    const dim = a.shape[0] + Math.abs(k);
-    void dim;
-    // TODO: Implementing diag() requires a core primitive to construct arrays
-    // from general index manipulation, not just ShapeTracker.
-    // (!!) Or I guess we could do it with "where" on a broadcasted array.
-    throw new Error("diag() behavior not yet implemented for 1D arrays");
+    const n = a.shape[0];
+    const ret = where(eye(n).equal(1), a, 0);
+    // pad() is unimplemented at this layer
+    if (k !== 0) throw new Error("diag() for 1D arrays only for k=0");
+    return ret;
   } else if (a.ndim === 2) {
     return diagonal(a, k);
   } else {

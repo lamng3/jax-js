@@ -46,6 +46,18 @@ suite.each(backendTypes)("backend:%s", (backend) => {
     });
   });
 
+  suite("jax.numpy.diag()", () => {
+    test("constructs diagonal from 1D array", () => {
+      const x = np.array([1, 2, 3]);
+      const y = np.diag(x);
+      expect(y.js()).toEqual([
+        [1, 0, 0],
+        [0, 2, 0],
+        [0, 0, 3],
+      ]);
+    });
+  });
+
   suite("jax.numpy.where()", () => {
     test("computes where", () => {
       const x = np.array([1, 2, 3]);
