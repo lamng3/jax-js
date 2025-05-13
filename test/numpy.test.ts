@@ -118,4 +118,45 @@ suite.each(backendTypes)("backend:%s", (backend) => {
       expect(grads.y.js()).toEqual([0, 0, 0]);
     });
   });
+
+  suite("jax.numpy.transpose()", () => {
+    test("transposes a 1D array (no-op)", () => {
+      const x = np.array([1, 2, 3]);
+      const y = np.transpose(x);
+      expect(y.js()).toEqual([1, 2, 3]);
+    });
+
+    test("transposes a 2D array", () => {
+      const x = np.array([
+        [1, 2, 3],
+        [4, 5, 6],
+      ]);
+      const y = np.transpose(x);
+      expect(y.js()).toEqual([
+        [1, 4],
+        [2, 5],
+        [3, 6],
+      ]);
+    });
+
+    test("composes with jvp", () => {
+      const x = np.array([
+        [1, 2, 3],
+        [4, 5, 6],
+      ]);
+      const [y, dy] = jvp(
+        (x: np.Array) => x.transpose().mul(x.transpose()),
+        [x],
+        [np.ones([2, 3])],
+      );
+      expect(y).toBeAllclose(x.mul(x).transpose());
+      expect(dy).toBeAllclose(x.mul(2).transpose());
+    });
+
+    test("composes with grad", () => {
+      const x = np.ones([3, 4]);
+      const dx = grad((x: np.Array) => x.transpose().sum())(x);
+      expect(dx).toBeAllclose(x);
+    });
+  });
 });

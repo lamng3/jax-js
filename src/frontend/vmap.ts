@@ -4,6 +4,8 @@ import {
   AbstractValue,
   add,
   broadcast,
+  compare,
+  CompareOp,
   cos,
   flattenFun,
   fullRaise,
@@ -124,8 +126,8 @@ class BatchTrace extends Trace {
 
 type VmapRule = (
   axisSize: number,
-  valsIn: Tracer[],
-  dimsIn: (number | null)[],
+  args: Tracer[],
+  dims: (number | null)[],
   params: any,
 ) => [Tracer[], (number | null)[]];
 
@@ -207,7 +209,10 @@ const vmapRules: Partial<Record<Primitive, VmapRule>> = {
     const outBdim = xBdim - axis.filter((ax) => ax < xBdim).length;
     return [[reduceSum(x, newAxis)], [outBdim]];
   },
-  // TODO: greater, less, equal, notEqual, where, transpose, broadcast
+  [Primitive.Compare](axisSize, args, dims, { op }: { op: CompareOp }) {
+    return broadcastBatcher((x, y) => compare(x, y, op))(axisSize, args, dims);
+  },
+  // TODO: where, transpose, broadcast
 };
 
 function vmapFlat(

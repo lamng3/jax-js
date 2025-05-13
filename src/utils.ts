@@ -102,6 +102,17 @@ export function isPermutation(axis: number[], n: number): boolean {
   return seen.size === n;
 }
 
+export function invertPermutation(axis: number[]): number[] {
+  const n = axis.length;
+  if (!isPermutation(axis, n))
+    throw new Error("invertPermutation: axis is not a permutation");
+  const result = new Array(n);
+  for (let i = 0; i < n; i++) {
+    result[axis[i]] = i;
+  }
+  return result;
+}
+
 /** Topologically sort a DAG, given terminal nodes and an ancestor function. */
 export function toposort<T>(terminals: T[], parents: (node: T) => T[]) {
   const childCounts: Map<T, number> = new Map();

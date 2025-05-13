@@ -2,7 +2,7 @@
 
 import { DType } from "../alu";
 import { flatten as treeFlatten, unflatten as treeUnflatten } from "../tree";
-import { toposort, unzip2 } from "../utils";
+import { invertPermutation, range, toposort, unzip2 } from "../utils";
 import { pureArray, zeros } from "./array";
 import {
   AbstractValue,
@@ -20,6 +20,7 @@ import {
   Trace,
   Tracer,
   TracerValue,
+  transpose,
   TreeMismatchError,
   where,
 } from "./core";
@@ -460,7 +461,13 @@ const transposeRules: Partial<Record<Primitive, TransposeRule>> = {
     }
     return cts;
   },
-  // TODO: transpose, broadcast
+  [Primitive.Transpose]([ct], [x], { perm }: { perm?: number[] }) {
+    if (!(x instanceof UndefPrimal))
+      throw new NonlinearError(Primitive.Transpose);
+    const tperm = perm ? invertPermutation(perm) : range(x.aval.ndim).reverse();
+    return [transpose(ct, tperm)];
+  },
+  // TODO: broadcast
 };
 
 function vjpFlat(

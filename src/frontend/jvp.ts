@@ -16,6 +16,7 @@ import {
   Trace,
   Tracer,
   TracerValue,
+  transpose,
   TreeMismatchError,
   where,
 } from "./core";
@@ -67,7 +68,7 @@ class JVPTrace extends Trace {
 }
 
 type JvpRule = (
-  primal: Tracer[],
+  primals: Tracer[],
   tangents: Tracer[],
   params: any,
 ) => [Tracer[], Tracer[]];
@@ -98,7 +99,10 @@ const jvpRules: Partial<Record<Primitive, JvpRule>> = {
   [Primitive.Where]([cond, x, y], [_, dx, dy]) {
     return [[where(cond, x, y)], [where(cond, dx, dy)]];
   },
-  // TODO: transpose, broadcast
+  [Primitive.Transpose]([x], [dx], { perm }: { perm?: number[] }) {
+    return [[transpose(x, perm)], [transpose(dx, perm)]];
+  },
+  // TODO: broadcast
 };
 
 function jvpFlat(
