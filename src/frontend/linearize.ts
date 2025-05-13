@@ -16,6 +16,7 @@ import {
   neg,
   newMain,
   Primitive,
+  reduceSum,
   ShapedArray,
   Trace,
   Tracer,
@@ -443,7 +444,7 @@ const transposeRules: Partial<Record<Primitive, TransposeRule>> = {
       throw new NonlinearError(Primitive.Add);
     return [ct, ct];
   },
-  [Primitive.ReduceSum]([ct], [x], { axis }) {
+  [Primitive.ReduceSum]([ct], [x], { axis }: { axis: number[] }) {
     if (!(x instanceof UndefPrimal))
       throw new NonlinearError(Primitive.ReduceSum);
     return [broadcast(ct, x.aval.shape, axis)];
@@ -467,7 +468,11 @@ const transposeRules: Partial<Record<Primitive, TransposeRule>> = {
     const tperm = perm ? invertPermutation(perm) : range(x.aval.ndim).reverse();
     return [transpose(ct, tperm)];
   },
-  // TODO: broadcast
+  [Primitive.Broadcast]([ct], [x], { axis }: { axis: number[] }) {
+    if (!(x instanceof UndefPrimal))
+      throw new NonlinearError(Primitive.Broadcast);
+    return [reduceSum(ct, axis)];
+  },
 };
 
 function vjpFlat(

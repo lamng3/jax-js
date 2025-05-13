@@ -3,6 +3,7 @@ import { unzip2, zip } from "../utils";
 import { pureArray, zerosLike } from "./array";
 import {
   AbstractValue,
+  broadcast,
   compare,
   CompareOp,
   cos,
@@ -102,7 +103,13 @@ const jvpRules: Partial<Record<Primitive, JvpRule>> = {
   [Primitive.Transpose]([x], [dx], { perm }: { perm?: number[] }) {
     return [[transpose(x, perm)], [transpose(dx, perm)]];
   },
-  // TODO: broadcast
+  [Primitive.Broadcast](
+    [x],
+    [dx],
+    { shape, axis }: { shape: number[]; axis: number[] },
+  ) {
+    return [[broadcast(x, shape, axis)], [broadcast(dx, shape, axis)]];
+  },
 };
 
 function jvpFlat(
