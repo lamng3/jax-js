@@ -8,7 +8,7 @@ import {
 } from "@jax-js/jax";
 import { beforeEach, expect, suite, test } from "vitest";
 
-const backendsAvailable = await init(...backendTypes);
+const backendsAvailable = await init();
 
 suite.each(backendTypes)("backend:%s", (backend) => {
   const skipped = !backendsAvailable.includes(backend);

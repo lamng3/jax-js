@@ -3,7 +3,7 @@ import { beforeEach, expect, suite, test } from "vitest";
 import { backendTypes, init, setBackend } from "../backend";
 import { array, ones, zeros } from "./array";
 
-const backendsAvailable = await init(...backendTypes);
+const backendsAvailable = await init();
 
 suite.each(backendTypes)("backend:%s", (backend) => {
   const skipped = !backendsAvailable.includes(backend);

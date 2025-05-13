@@ -147,9 +147,6 @@ export class Array extends Tracer {
     }
   }
 
-  // Movement operations
-  // TODO: move to Tracer / Primitive
-
   #reshape(st: ShapeTracker): Array {
     return new Array(
       this.#source,

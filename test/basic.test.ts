@@ -1,7 +1,5 @@
-import { init, jacfwd, jvp, numpy as np, vmap } from "@jax-js/jax";
+import { jacfwd, jvp, numpy as np, vmap } from "@jax-js/jax";
 import { expect, suite, test } from "vitest";
-
-await init("cpu");
 
 test("can create array", () => {
   const x = np.array([1, 2, 3]);

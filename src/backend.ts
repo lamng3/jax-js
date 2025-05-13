@@ -10,6 +10,7 @@
  */
 
 import { Kernel } from "./alu";
+import { CPUBackend } from "./backend/cpu";
 
 export type BackendType = "cpu" | "webgpu";
 export const backendTypes: BackendType[] = ["cpu", "webgpu"];
@@ -18,6 +19,7 @@ export const backendTypes: BackendType[] = ["cpu", "webgpu"];
 // test platform or all browsers, so it shouldn't be the default.
 let defaultBackend: BackendType = "cpu";
 const initializedBackends = new Map<BackendType, Backend>();
+initializedBackends.set("cpu", new CPUBackend());
 
 /** Set the default backend (must be initialized). */
 export function setBackend(backendType: BackendType): void {
@@ -61,7 +63,6 @@ async function createBackend(
   backendType: BackendType,
 ): Promise<Backend | null> {
   if (backendType === "cpu") {
-    const { CPUBackend } = await import("./backend/cpu");
     return new CPUBackend();
   } else if (backendType === "webgpu") {
     if (!navigator.gpu) return null; // WebGPU is not available.

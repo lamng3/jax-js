@@ -13,7 +13,7 @@ import { backendTypes, getBackend, init } from "../backend";
 import { ShapeTracker, unravelAlu } from "../shape";
 import { range } from "../utils";
 
-const backendsAvailable = await init(...backendTypes);
+const backendsAvailable = await init();
 
 suite.each(backendTypes)("backend:%s", (backendType) => {
   const skipped = !backendsAvailable.includes(backendType);

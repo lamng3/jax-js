@@ -1,15 +1,5 @@
-import {
-  grad,
-  init,
-  jvp,
-  linearize,
-  makeJaxpr,
-  numpy as np,
-  vjp,
-} from "@jax-js/jax";
+import { grad, jvp, linearize, makeJaxpr, numpy as np, vjp } from "@jax-js/jax";
 import { expect, suite, test } from "vitest";
-
-await init("cpu");
 
 suite("jax.makeJaxpr()", () => {
   test("tracks a nullary function", () => {
