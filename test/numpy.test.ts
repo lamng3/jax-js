@@ -159,4 +159,16 @@ suite.each(backendTypes)("backend:%s", (backend) => {
       expect(dx).toBeAllclose(x);
     });
   });
+
+  suite("jax.numpy.matrixTranspose()", () => {
+    test("throws TypeError on 1D array", () => {
+      const x = np.zeros([20]);
+      expect(() => np.matrixTranspose(x)).toThrow(TypeError);
+    });
+
+    test("transposes a stack of matrices", () => {
+      const x = np.zeros([5, 60, 7]);
+      expect(np.matrixTranspose(x).shape).toEqual([5, 7, 60]);
+    });
+  });
 });

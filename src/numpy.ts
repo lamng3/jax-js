@@ -11,7 +11,7 @@ import {
 } from "./frontend/array";
 import * as core from "./frontend/core";
 import * as vmapModule from "./frontend/vmap";
-import { deepEqual } from "./utils";
+import { deepEqual, range } from "./utils";
 
 export { Array, array, DType, eye, scalar, zeros, ones, full };
 
@@ -104,6 +104,14 @@ export function diagonal(
   axis2?: number,
 ): Array {
   return fudgeArray(a).diagonal(offset, axis1, axis2);
+}
+
+/** Transposes a matrix or stack of matrices `x` (swap last two axes). */
+export function matrixTranspose(x: ArrayLike): Array {
+  const ar = fudgeArray(x);
+  if (ar.ndim < 2)
+    throw new TypeError("matrixTranspose only supports 2D+ arrays");
+  return ar.transpose([...range(ar.ndim - 2), ar.ndim - 1, ar.ndim - 2]);
 }
 
 /**
