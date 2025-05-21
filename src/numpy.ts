@@ -13,7 +13,7 @@ import {
 import * as core from "./frontend/core";
 import { jit } from "./frontend/jaxpr";
 import * as vmapModule from "./frontend/vmap";
-import { deepEqual, prod, range } from "./utils";
+import { deepEqual, prod, range, rep } from "./utils";
 
 export { Array, array, DType, eye, identity, scalar, zeros, ones, full };
 
@@ -231,6 +231,7 @@ export function allclose(
   return true;
 }
 
+/** Matrix product of two arrays. */
 export const matmul = jit(function matmul(x: Array, y: Array) {
   if (x.ndim === 0 || y.ndim === 0) {
     throw new TypeError("matmul: x and y must be at least 1D");
@@ -251,4 +252,30 @@ export const matmul = jit(function matmul(x: Array, y: Array) {
     ]); // [..., 1, M, K]
 
   return x.mul(y).sum(Math.max(x.ndim, y.ndim) - 1);
+});
+
+/** Dot product of two arrays. */
+export const dot = jit(function dot(x: Array, y: Array) {
+  if (x.ndim === 0 || y.ndim === 0) {
+    // Standard, scalar multiplication
+    return multiply(x, y);
+  }
+  if (y.ndim === 1) {
+    // Matrix-vector product
+    return x.mul(y).sum(x.ndim - 1);
+  }
+  // Otherwise, this is the "sum product" between the last axis of x, and the
+  // second-to-last axis of y. (y.ndim >= 2)
+  //
+  // dot(x, y)[i,j,k,m] = sum(x[i,j,:] * y[k,:,m])
+  y = y.transpose([
+    ...range(y.shape.length - 2),
+    y.shape.length - 1,
+    y.shape.length - 2,
+  ]); // [..., M, K]
+
+  // Now unsqueeze axes of x so that they appear to the left of y.
+  x = x.reshape(x.shape.toSpliced(-1, 0, ...rep(y.ndim - 1, 1))); // [..., N, 1, 1, ..., 1, K]
+
+  return x.mul(y).sum(x.ndim - 1);
 });

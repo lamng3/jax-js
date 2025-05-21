@@ -304,4 +304,41 @@ suite.each(backendTypes)("backend:%s", (backend) => {
       ]);
     });
   });
+
+  suite("jax.numpy.dot()", () => {
+    test("acts as scalar multiplication", () => {
+      const z = np.dot(3, 4);
+      expect(z.js()).toEqual(12);
+    });
+
+    test("computes 1D dot product", () => {
+      const x = np.array([1, 2, 3]);
+      const y = np.array([4, 5, 6]);
+      const z = np.dot(x, y);
+      expect(z.js()).toEqual(32);
+    });
+
+    test("computes 2D dot product", () => {
+      const x = np.array([
+        [1, 2],
+        [3, 4],
+      ]);
+      const y = np.array([
+        [5, 6],
+        [7, 8],
+      ]);
+      const z = np.dot(x, y);
+      expect(z.js()).toEqual([
+        [19, 22],
+        [43, 50],
+      ]);
+    });
+
+    test("produces correct shape", () => {
+      const x = np.zeros([2, 3, 4, 5]);
+      const y = np.zeros([1, 4, 5, 6]);
+      const z = np.dot(x, y);
+      expect(z.shape).toEqual([2, 3, 4, 1, 4, 6]);
+    });
+  });
 });

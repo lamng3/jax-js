@@ -490,7 +490,8 @@ export class Array extends Tracer {
         const { outputs, pending } = jp.execute(
           tracers.map((x) => x._realizeSource()),
         );
-        pending.push(...tracers.flatMap((x) => x.#pending));
+        // Dispatch order of pending kernels is important.
+        pending.splice(0, 0, ...args.flatMap((x) => x.#pending));
         return outputs.map((source, i) => {
           return new Array(
             source,
