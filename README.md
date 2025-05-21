@@ -63,9 +63,6 @@ npm test
 ## Next on Eric's mind
 
 - How many threads to create per workgroup, depends on hardware
-- Should I define matmul in terms of `jit()`, or make it a separate primitive
-  - Maybe the primitive can be some kind of einsum for dot/vecdot/matmul/diagonal/…
-  - Actually yeah, before we build `jit()`, maybe a minimal einsum would be good enough
 - Think about two-stage `cumsum()`
 - Disposal by enforcing a `.ref` getter? This isn't included in console.log, but it's included in `{...spread}` syntax, hopefully not used often with arrays.
   ```js
