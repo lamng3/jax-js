@@ -241,10 +241,7 @@ function pipelineSource(device: GPUDevice, kernel: Kernel): ShaderInfo {
     `@group(0) @binding(${nargs}) var<storage, read_write> result : array<${resultTy}>;`,
   );
 
-  const workgroupSize = findPow2(
-    tune.threadCount,
-    device.limits.maxComputeWorkgroupSizeX,
-  );
+  const workgroupSize = findPow2(tune.threadCount, 256);
 
   emit(
     "",
@@ -341,9 +338,7 @@ function pipelineSource(device: GPUDevice, kernel: Kernel): ShaderInfo {
     if ((tune.size.groups ?? 1) > 1) {
       throw new Error("WebGPU backend does not support group optimization yet");
     }
-    if ((tune.size.unroll ?? 1) > 1) {
-      throw new Error("WebGPU backend does not support unrolling yet");
-    }
+    const unroll = tune.size.unroll ?? 1;
     const upcast = tune.size.upcast ?? 1;
 
     const acc = [...Array(upcast)].map((_, i) => `acc${i}`);
@@ -358,24 +353,36 @@ function pipelineSource(device: GPUDevice, kernel: Kernel): ShaderInfo {
       pushIndent,
     );
 
-    // Now generate expressions for each accumulator, with shared.
-    const exps: AluExp[] = [];
+    // Now generate (shared) expressions for each accumulator and unroll value.
+    const exps: AluExp[][] = [];
     const cache = new Map<bigint, AluExp>();
-    for (let i = 0; i < upcast; i++) {
-      const exp = tune.exp.substitute({ upcast: AluExp.i32(i) });
-      exps.push(exp.simplify(cache));
-      countReferences(exps[i]);
+    for (let up = 0; up < upcast; up++) {
+      exps.push([]);
+      for (let un = 0; un < unroll; un++) {
+        const exp = tune.exp.substitute({
+          upcast: AluExp.i32(up),
+          unroll: AluExp.i32(un),
+        });
+        exps[up].push(exp.simplify(cache));
+        countReferences(exps[up][un]);
+      }
     }
 
     // After references are counted, we can generate the code.
-    const items = exps.map(gen).map(strip1);
+    const items = exps.map((ar) => ar.map(gen).map(strip1));
     for (let i = 0; i < upcast; i++) {
-      if (re.op === AluOp.Add) emit(`${acc[i]} += ${items[i]};`);
-      else if (re.op === AluOp.Mul) emit(`${acc[i]} *= ${items[i]};`);
-      else if (re.op === AluOp.Min)
-        emit(`${acc[i]} = min(${acc[i]}, ${items[i]});`);
-      else if (re.op === AluOp.Max)
-        emit(`${acc[i]} = max(${acc[i]}, ${items[i]});`);
+      let rhs = items[i][0];
+      for (let j = 1; j < unroll; j++) {
+        if (re.op === AluOp.Add) rhs = `${rhs} + ${items[i][j]}`;
+        else if (re.op === AluOp.Mul) rhs = `${rhs} * ${items[i][j]}`;
+        else if (re.op === AluOp.Min) rhs = `min(${rhs}, ${items[i][j]})`;
+        else if (re.op === AluOp.Max) rhs = `max(${rhs}, ${items[i][j]})`;
+        else throw new Error(`Unsupported reduction op: ${re.op}`);
+      }
+      if (re.op === AluOp.Add) emit(`${acc[i]} += ${rhs};`);
+      else if (re.op === AluOp.Mul) emit(`${acc[i]} *= ${rhs};`);
+      else if (re.op === AluOp.Min) emit(`${acc[i]} = min(${acc[i]}, ${rhs});`);
+      else if (re.op === AluOp.Max) emit(`${acc[i]} = max(${acc[i]}, ${rhs});`);
       else throw new Error(`Unsupported reduction op: ${re.op}`);
     }
     emit(popIndent, "}");

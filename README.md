@@ -64,6 +64,7 @@ npm test
 
 - Write tests for jvp-of-jit, grad-of-jit, + implement jit-of-jit
 - How many threads to create per workgroup, depends on hardware
+  - Need to break up kernel dispatches if workgroup count exceeds 65536
 - Think about two-stage `cumsum()`
 - Disposal by enforcing a `.ref` getter? This isn't included in console.log, but it's included in `{...spread}` syntax, hopefully not used often with arrays.
   ```js
@@ -86,7 +87,7 @@ npm test
   - [x] Reduction operations
 - [ ] Kernel tuning (see `tuner.ts`)
   - [x] "Upcast" optimizations (compute a tile per thread, e.g., matmul)
-  - [ ] "Unroll" optimizations (multiple loop iters per thread, e.g., matmul)
+  - [x] "Unroll" optimizations (multiple loop iters per thread, e.g., matmul)
   - [ ] "Group" optimizations (multiple threads per value, e.g., matvec)
   - [ ] Blocks respect local dimensions
 - [x] Other dtypes like int32 and bool

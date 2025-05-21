@@ -66,6 +66,10 @@ class TuneDims {
   unroll: number; // Upcast along the reduce dimension.
   upcast: number; // Upcast along output dimension.
 
+  get end() {
+    return this.st.shape.length;
+  }
+
   constructor(shape: number[]) {
     this.st = ShapeTracker.fromShape(shape);
     this.outputSt = ShapeTracker.fromShape(shape.slice(0, -1));
@@ -73,6 +77,46 @@ class TuneDims {
     this.reduce = this.st.shape.length - 1;
     this.unroll = this.st.shape.length;
     this.upcast = this.st.shape.length;
+  }
+
+  // Place the axis at the end of the shape, so it is part of each workgroup.
+  applyLocal(axis: number, amount: number) {
+    if (axis >= this.groups) throw new Error("Cannot localize reduction axis");
+    const length = this.st.shape[axis];
+    if (length % amount !== 0)
+      throw new Error(`Localize by ${amount} on axis length ${length}`);
+
+    if (length !== amount) {
+      // First split it.
+      this.groups++, this.reduce++, this.unroll++, this.upcast++;
+      this.st = this.st.reshape([
+        ...this.st.shape.slice(0, axis),
+        length / amount,
+        amount,
+        ...this.st.shape.slice(axis + 1),
+      ]);
+      this.outputSt = this.outputSt.reshape([
+        ...this.outputSt.shape.slice(0, axis),
+        length / amount,
+        amount,
+        ...this.outputSt.shape.slice(axis + 1),
+      ]);
+      axis++;
+    }
+
+    // Now permute axis to the end of the real axes, before groups.
+    this.st = this.st.permute([
+      ...range(axis),
+      ...range(axis + 1, this.groups),
+      axis,
+      ...range(this.groups, this.st.shape.length),
+    ]);
+    this.outputSt = this.outputSt.permute([
+      ...range(axis),
+      ...range(axis + 1, this.groups),
+      axis,
+      ...range(this.groups, this.outputSt.shape.length),
+    ]);
   }
 
   applyUpcast(axis: number, amount: number) {
@@ -248,6 +292,38 @@ export function tuneWebgpu(kernel: Kernel): TuneResult {
     }
   }
 
+  // Try to do loop unrolling on the reduce axis, with an upcast limit.
+  if (
+    dim.reduce < dim.unroll &&
+    (prod(dim.st.shape.slice(dim.unroll)) <= 4 ||
+      (dim.unroll === dim.upcast && prod(dim.st.shape.slice(dim.upcast)) < 64))
+  ) {
+    // Fully unroll the reduce axis.
+    const s = dim.st.shape[dim.unroll - 1];
+    if (s <= 32) {
+      dim.applyUnroll(dim.reduce, s);
+    } else {
+      // Partially unroll the reduce axis.
+      for (const splits of [4]) {
+        if (s % splits === 0) {
+          dim.applyUnroll(dim.unroll - 1, splits);
+          break;
+        }
+      }
+    }
+  }
+
+  for (const ax of Array.from(upcastedAxis).sort()) {
+    const s = dim.st.shape[ax];
+    // TODO: These applyLocal() calls are a hack / bad heuristic, make this better.
+    for (const amount of [8, 4]) {
+      if (s % amount === 0) {
+        dim.applyLocal(ax, amount);
+        break;
+      }
+    }
+  }
+
   // 4. Return the tuned kernel result.
   const indices: AluExp[] = [];
   const addIndices = (s: number[], exp: AluExp) => {
@@ -271,7 +347,7 @@ export function tuneWebgpu(kernel: Kernel): TuneResult {
     const s = dim.st.shape.slice(dim.unroll, dim.upcast);
     addIndices(s, AluVar.unroll);
   }
-  if (dim.upcast < dim.st.shape.length - 1) {
+  if (dim.upcast < dim.end) {
     const s = dim.st.shape.slice(dim.upcast);
     addIndices(s, AluVar.upcast);
   }

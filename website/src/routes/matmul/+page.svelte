@@ -696,11 +696,14 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
       const jax = await import("@jax-js/jax");
       await jax.init();
       jax.setBackend("webgpu");
+      const np = jax.numpy;
 
-      const a = jax.numpy.array(randomBuffer).reshape([n, n]);
-      const b = jax.numpy.array(randomBuffer).reshape([n, n]);
+      const a = np.array(randomBuffer, { shape: [n, n] });
+      const b = np.array(randomBuffer, { shape: [n, n] });
+      await a.data();
+      await b.data(); // TODO: Why is this needed? Should we use writeBuffer() instead of mapping?
       const start = performance.now();
-      const c = jax.numpy.dot(a, b);
+      const c = np.dot(a, b);
       const ar = (await c.data()) as Float32Array;
       printBufferItems(ar);
       const time = performance.now() - start;
