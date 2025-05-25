@@ -254,6 +254,64 @@ export class Jaxpr {
 
     return new Jaxpr(this.inBinders, liveEqns.reverse(), outs);
   }
+
+  /** Flattens nested JitCall in a Jaxpr. Useful for handling jit-of-jit. */
+  flatten(): Jaxpr {
+    if (!this.eqns.some((eqn) => eqn.primitive === Primitive.JitCall)) {
+      // Fast path: no JitCall to flatten.
+      return this;
+    }
+    // Otherwise, we need to flatten this Jaxpr.
+    const newEqns: JaxprEqn[] = [];
+    const varMap = new Map<Var, Atom>(); // outBinders from JitCall are replaced with new values
+    const varMapF = (x: Atom) => (x instanceof Var ? (varMap.get(x) ?? x) : x);
+    for (const eqn of this.eqns) {
+      if (eqn.primitive === Primitive.JitCall) {
+        // First, flatten the Jaxpr recursively.
+        const jaxpr = (eqn.params.jaxpr as Jaxpr).flatten();
+        // Make a mapping of this Jaxpr's variables to translated values.
+        const translation = new Map<Var, Atom>();
+        const translationF = (x: Atom) =>
+          x instanceof Var ? translation.get(x)! : x;
+        for (const [v, x] of zip(jaxpr.inBinders, eqn.inputs)) {
+          translation.set(v, varMapF(x));
+        }
+        for (const ieqn of jaxpr.eqns) {
+          const inputs = ieqn.inputs.map(translationF);
+          const outBinders: Var[] = [];
+          for (const v of ieqn.outBinders) {
+            const u = new Var(v.aval);
+            outBinders.push(u);
+            translation.set(v, u);
+          }
+          newEqns.push(
+            new JaxprEqn(ieqn.primitive, inputs, ieqn.params, outBinders),
+          );
+        }
+        // Add the outputs to the mapping.
+        for (const [v, x] of zip(eqn.outBinders, jaxpr.outs)) {
+          varMap.set(v, translationF(x));
+        }
+      } else {
+        if (eqn.inputs.some((x) => x instanceof Var && varMap.has(x))) {
+          // Replace any input variables if needed.
+          newEqns.push(
+            new JaxprEqn(
+              eqn.primitive,
+              eqn.inputs.map(varMapF),
+              eqn.params,
+              eqn.outBinders,
+            ),
+          );
+        } else {
+          newEqns.push(eqn);
+        }
+      }
+    }
+    // Replace the output variables if needed.
+    const newOuts = this.outs.map(varMapF);
+    return new Jaxpr(this.inBinders, newEqns, newOuts);
+  }
 }
 
 export class JaxprType {

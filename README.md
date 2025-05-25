@@ -62,7 +62,7 @@ npm test
 
 ## Next on Eric's mind
 
-- Write tests for jvp-of-jit, grad-of-jit, + implement jit-of-jit
+- Fix grad-of-jit not working due to partial eval of jvpJaxpr()
 - How many threads to create per workgroup, depends on hardware
   - Need to break up kernel dispatches if workgroup count exceeds 65536
 - Think about two-stage `cumsum()`

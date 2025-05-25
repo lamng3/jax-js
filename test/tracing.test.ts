@@ -65,6 +65,40 @@ suite("jax.makeJaxpr()", () => {
         in ( c ) }"
     `);
   });
+
+  test("can flatten() nested Jaxprs", () => {
+    const f = (x: np.Array) => {
+      const y = x.add(2);
+      return x.mul(x).add(y);
+    };
+    const jf = jit(f);
+
+    const { jaxpr, consts } = makeJaxpr((x) => f(jf(x)))(3);
+    expect(consts).toEqual([]);
+    expect(jaxpr.toString()).toMatchInlineSnapshot(`
+      "{ lambda a:float32[] .
+        let b:float32[] = jit_call [ jaxpr={ lambda a:float32[] .
+                                       let b:float32[] = add a 2
+                                           c:float32[] = mul a a
+                                           d:float32[] = add c b
+                                       in ( d ) }
+                                     numConsts=0 ] a
+            c:float32[] = add b 2
+            d:float32[] = mul b b
+            e:float32[] = add d c
+        in ( e ) }"
+    `);
+    expect(jaxpr.flatten().toString()).toMatchInlineSnapshot(`
+      "{ lambda a:float32[] .
+        let b:float32[] = add a 2
+            c:float32[] = mul a a
+            d:float32[] = add c b
+            e:float32[] = add d 2
+            f:float32[] = mul d d
+            g:float32[] = add f e
+        in ( g ) }"
+    `);
+  });
 });
 
 suite("jax.linearize()", () => {
@@ -132,5 +166,22 @@ suite("jax.jit()", () => {
     const f2 = jit(f);
     expect(f(np.array(2))).toBeAllclose(8);
     expect(f2(np.array(2))).toBeAllclose(8);
+  });
+
+  test("jit-of-jit", () => {
+    const f = jit((x: np.Array) => x.mul(x));
+    const g = jit((x: np.Array) => f(f(x)));
+    expect(g(3)).toBeAllclose(81);
+  });
+
+  test("jvp-of-jit", () => {
+    const f = jit((x: np.Array) => x.mul(x));
+    expect(jvp(f, [3], [1])).toBeAllclose([9, 6]);
+  });
+
+  // TODO
+  test.fails("grad-of-jit", () => {
+    const f = jit((x: np.Array) => x.mul(x));
+    expect(grad(f)(3)).toBeAllclose(6);
   });
 });

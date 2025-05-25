@@ -200,6 +200,7 @@ export function jitCompile(
     console.info("=========== JIT Compile ===========\n" + jaxpr.toString());
   }
 
+  jaxpr = jaxpr.flatten().simplify();
   const nargs = jaxpr.inBinders.length - consts.length;
   const builder = new JitProgramBuilder(backend, nargs);
 
@@ -307,7 +308,7 @@ export function jitCompile(
     const kernel = rule(nargs, inputExps, inputAvals, eqn.params);
 
     // Then dispatch the kernel, if it is a "black" node as determined from
-    // graphic analysis above.
+    // dataflow analysis above.
     const outVar = eqn.outBinders[0];
     if (kernel.reduction || nextBlack.get(outVar) === outVar) {
       const outId = builder.pushKernel(kernel, inputArgs);
@@ -462,5 +463,4 @@ const jitRules: Partial<Record<Primitive, JitRule>> = {
       return st.flip(arg);
     },
   ),
-  // TODO: JitCall, for jit-of-jit.
 };
