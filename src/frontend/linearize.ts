@@ -2,7 +2,7 @@
 
 import { DType } from "../alu";
 import { flatten as treeFlatten, unflatten as treeUnflatten } from "../tree";
-import { invertPermutation, toposort, unzip2, zip } from "../utils";
+import { invertPermutation, toposort, unzip2 } from "../utils";
 import { pureArray, scalar, zeros } from "./array";
 import {
   AbstractValue,
@@ -235,6 +235,12 @@ class PartialEvalTrace extends Trace {
         params,
       );
     }
+    if (primitive === Primitive.JitCall) {
+      // Special case, needs its own PartialEvalTrace handling because unlike
+      // other primtiives, JitCall can have subexpressions that are known while
+      // other outputs are unknown.
+      return this.#partialEvalJaxpr(params.jaxpr, params.numConsts, tracers);
+    }
     const tracersIn = tracers.map((t) => this.instantiateConst(t));
     const avalsIn = tracersIn.map((t) => t.pval.aval);
     const avalsOut = abstractEvalRules[primitive](avalsIn, params);
@@ -251,6 +257,81 @@ class PartialEvalTrace extends Trace {
     );
     recipe.tracerRefsOut = tracersOut.map((t) => new WeakRef(t));
     return tracersOut;
+  }
+
+  /**
+   * Evaluate a Jaxpr on a set of PartialEvalTracers, computing as many known
+   * values as possible (with JIT) and forwarding the unknown ones.
+   *
+   * Used when encountering a JitCall rule during the trace.
+   */
+  #partialEvalJaxpr(
+    jaxpr: Jaxpr,
+    numConsts: number,
+    tracers: PartialEvalTracer[],
+  ): Tracer[] {
+    jaxpr = jaxpr.flatten(); // Otherwise, we don't partially evaluate nested Jaxprs well.
+
+    const knownEqns: JaxprEqn[] = [];
+
+    const inKnown = tracers.map((t) => t.pval.isKnown);
+    const knownIns = jaxpr.inBinders.filter((_, i) => inKnown[i]);
+    const knownVars = new Set(knownIns); // Var that we can evaluate immediately.
+    for (const eqn of jaxpr.eqns) {
+      if (eqn.inputs.every((x) => x instanceof Lit || knownVars.has(x))) {
+        knownEqns.push(eqn);
+        for (const v of eqn.outBinders) {
+          knownVars.add(v);
+        }
+      }
+    }
+    const outKnown = jaxpr.outs.map(
+      (x) => x instanceof Lit || knownVars.has(x),
+    );
+    const knownOuts = jaxpr.outs.filter((_, i) => outKnown[i]);
+    const unknownOuts = jaxpr.outs.filter((_, i) => !outKnown[i]);
+
+    // This should not call an infinite recursion because all of these tracers are
+    // known, so fullLower() unwraps the PartialEvalTrace layer.
+    const knownJaxpr = new Jaxpr(knownIns, knownEqns, knownOuts).simplify();
+    const outs1 = bind(
+      Primitive.JitCall,
+      tracers.filter((_, i) => inKnown[i]).map((t) => t.fullLower()),
+      {
+        jaxpr: knownJaxpr,
+        numConsts: inKnown
+          .slice(0, numConsts)
+          .reduce((a, b) => a + Number(b), 0),
+      },
+    );
+
+    // Next, create a Jaxpr that _only_ produces the unknown outputs.
+    const unknownJaxpr = new Jaxpr(
+      jaxpr.inBinders,
+      jaxpr.eqns,
+      unknownOuts,
+    ).simplify();
+
+    // Evaluate those as usual.
+    const tracersIn = tracers.map((t) => this.instantiateConst(t));
+    const recipe: JaxprRecipe = {
+      type: "JaxprEqn",
+      prim: Primitive.JitCall,
+      tracersIn,
+      params: { jaxpr: unknownJaxpr, numConsts },
+      avalsOut: unknownOuts.map((x) => x.aval),
+      tracerRefsOut: [], // Populated later on
+    };
+    console.log(`${unknownJaxpr} ` + tracersIn.join(","));
+    const outs2 = unknownOuts.map(
+      (x) => new PartialEvalTracer(this, PartialVal.unknown(x.aval), recipe),
+    );
+    recipe.tracerRefsOut = outs2.map((t) => new WeakRef(t));
+
+    // Stitch the known and unknown output tracers together, both with JitCall.
+    let i = 0;
+    let j = 0;
+    return outKnown.map((known) => (known ? outs1[i++] : outs2[j++]));
   }
 }
 
@@ -431,25 +512,26 @@ type TransposeRule = (
 const transposeRules: Partial<Record<Primitive, TransposeRule>> = {
   [Primitive.Mul]([ct], [x, y]) {
     // BUG: Doesn't handle broadcasting.
-    if (x instanceof UndefPrimal === y instanceof UndefPrimal)
+    if (x instanceof UndefPrimal && y instanceof UndefPrimal)
       throw new NonlinearError(Primitive.Mul);
-    return x instanceof UndefPrimal
-      ? [mul(ct, y as Tracer), null]
-      : [null, mul(x as Tracer, ct)];
+    return [
+      x instanceof UndefPrimal ? mul(ct, y as Tracer) : null,
+      y instanceof UndefPrimal ? mul(x as Tracer, ct) : null,
+    ];
   },
   [Primitive.Neg]([ct], [x]) {
-    if (!(x instanceof UndefPrimal)) throw new NonlinearError(Primitive.Neg);
+    if (!(x instanceof UndefPrimal)) return [null];
     return [neg(ct)];
   },
   [Primitive.Add]([ct], [x, y]) {
     // BUG: Doesn't handle broadcasting.
-    if (!(x instanceof UndefPrimal || y instanceof UndefPrimal))
-      throw new NonlinearError(Primitive.Add);
-    return [ct, ct];
+    return [
+      x instanceof UndefPrimal ? ct : null,
+      y instanceof UndefPrimal ? ct : null,
+    ];
   },
   [Primitive.ReduceSum]([ct], [x], { axis }: { axis: number[] }) {
-    if (!(x instanceof UndefPrimal))
-      throw new NonlinearError(Primitive.ReduceSum);
+    if (!(x instanceof UndefPrimal)) return [null];
     return [broadcast(ct, x.aval.shape, axis)];
   },
   // BUG: Doesn't handle broadcasting.
@@ -466,22 +548,19 @@ const transposeRules: Partial<Record<Primitive, TransposeRule>> = {
     return cts;
   },
   [Primitive.Transpose]([ct], [x], { perm }: { perm: number[] }) {
-    if (!(x instanceof UndefPrimal))
-      throw new NonlinearError(Primitive.Transpose);
+    if (!(x instanceof UndefPrimal)) return [null];
     return [transpose(ct, invertPermutation(perm))];
   },
   [Primitive.Broadcast]([ct], [x], { axis }: { axis: number[] }) {
-    if (!(x instanceof UndefPrimal))
-      throw new NonlinearError(Primitive.Broadcast);
+    if (!(x instanceof UndefPrimal)) return [null];
     return [reduceSum(ct, axis)];
   },
   [Primitive.Reshape]([ct], [x], _: { shape: number[] }) {
-    if (!(x instanceof UndefPrimal))
-      throw new NonlinearError(Primitive.Reshape);
+    if (!(x instanceof UndefPrimal)) return [null];
     return [reshape(ct, x.aval.shape)];
   },
   [Primitive.Flip]([ct], [x], { axis }: { axis: number[] }) {
-    if (!(x instanceof UndefPrimal)) throw new NonlinearError(Primitive.Flip);
+    if (!(x instanceof UndefPrimal)) return [null];
     return [flip(ct, axis)];
   },
   [Primitive.JitCall](cts, args, { jaxpr }: { jaxpr: Jaxpr }) {
@@ -518,12 +597,21 @@ function transposeJaxpr(
   // evaluate the Jaxpr transposed and then retrace it. See the comment in
   // jvpJaxpr() to explain more about what's going on here.
   const { inTypes, outTypes } = typecheckJaxpr(jaxpr);
-  const args = zip(inTypes, undefPrimals).map(([aval, isUndef]) =>
-    isUndef ? new UndefPrimal(aval) : aval,
-  );
-  const { jaxpr: newJaxpr, consts: newConsts } = makeJaxpr((args, cotangents) =>
-    evalJaxprTransposed(jaxpr, args, cotangents),
-  )(args, outTypes);
+
+  // Need to remove the UndefPrimals from the input types, as they are not
+  // inputs to the Jaxpr while tracing.
+  const forwardInTypes = inTypes.filter((_, i) => !undefPrimals[i]);
+  const { jaxpr: newJaxpr, consts: newConsts } = makeJaxpr(
+    (forwardIn: Tracer[], cotangents: Tracer[]) => {
+      const args: (Tracer | UndefPrimal)[] = [];
+      let forwardInIdx = 0; // index in forwardIn
+      for (let i = 0; i < undefPrimals.length; i++) {
+        if (undefPrimals[i]) args.push(new UndefPrimal(inTypes[i]));
+        else args.push(forwardIn[forwardInIdx++]);
+      }
+      return evalJaxprTransposed(jaxpr, args, cotangents);
+    },
+  )(forwardInTypes, outTypes);
   typecheckJaxpr(newJaxpr); // sanity check
   const result = { newJaxpr, newConsts };
 

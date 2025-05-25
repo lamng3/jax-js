@@ -495,6 +495,11 @@ export class Array extends Tracer {
         args,
         { jaxpr, numConsts }: { jaxpr: Jaxpr; numConsts: number },
       ) {
+        if (jaxpr.inBinders.length !== args.length) {
+          throw new Error(
+            `jit_call expects ${jaxpr.inBinders.length} args, got ${args.length}`,
+          );
+        }
         const backend = getBackend(); // TODO: Use correct backend.
         const consts = args.slice(0, numConsts);
         const tracers = args.slice(numConsts);

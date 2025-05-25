@@ -172,6 +172,7 @@ suite("jax.jit()", () => {
     const f = jit((x: np.Array) => x.mul(x));
     const g = jit((x: np.Array) => f(f(x)));
     expect(g(3)).toBeAllclose(81);
+    expect(jit(jit(g))(3)).toBeAllclose(81);
   });
 
   test("jvp-of-jit", () => {
@@ -179,9 +180,11 @@ suite("jax.jit()", () => {
     expect(jvp(f, [3], [1])).toBeAllclose([9, 6]);
   });
 
-  // TODO
-  test.fails("grad-of-jit", () => {
+  test("grad-of-jit", () => {
     const f = jit((x: np.Array) => x.mul(x));
     expect(grad(f)(3)).toBeAllclose(6);
+    expect(grad(f)(10)).toBeAllclose(20);
+    expect(grad(grad(f))(10)).toBeAllclose(2);
+    expect(grad(jit(grad(f)))(10)).toBeAllclose(2);
   });
 });

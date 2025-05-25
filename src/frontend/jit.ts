@@ -44,6 +44,11 @@ export class JitProgram {
   /** Execute the JitProgram with the given inputs. */
   execute(inputs: Slot[]): { outputs: Slot[]; pending: PendingExecute[] } {
     const scope = new Map<JitId, Slot>();
+    if (inputs.length !== this.inputs.length) {
+      throw new TypeError(
+        `Expected ${this.inputs.length} inputs, got ${inputs.length}`,
+      );
+    }
     for (const [i, id] of this.inputs.entries()) {
       scope.set(id, inputs[i]);
     }
