@@ -671,7 +671,7 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
     async run(): Promise<number> {
       const tf = await import("@tensorflow/tfjs");
       await import("@tensorflow/tfjs-backend-webgpu");
-      await tf.setDevice("webgpu");
+      await tf.setBackend("webgpu");
 
       const a = tf.tensor(randomBuffer, [n, n]);
       const b = tf.tensor(randomBuffer, [n, n]);
