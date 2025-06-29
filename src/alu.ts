@@ -61,11 +61,11 @@ export class AluExp implements FpHashable {
   static cos(a: AluExp): AluExp {
     return new AluExp(AluOp.Cos, a.dtype, [a]);
   }
-  static exp2(a: AluExp): AluExp {
-    return new AluExp(AluOp.Exp2, a.dtype, [a]);
+  static exp(a: AluExp): AluExp {
+    return new AluExp(AluOp.Exp, a.dtype, [a]);
   }
-  static log2(a: AluExp): AluExp {
-    return new AluExp(AluOp.Log2, a.dtype, [a]);
+  static log(a: AluExp): AluExp {
+    return new AluExp(AluOp.Log, a.dtype, [a]);
   }
   static reciprocal(a: AluExp): AluExp {
     return new AluExp(AluOp.Reciprocal, a.dtype, [a]);
@@ -250,11 +250,11 @@ export class AluExp implements FpHashable {
       case AluOp.Cos:
         ret = [Math.cos(src[0].min), Math.cos(src[0].max)];
         break;
-      case AluOp.Exp2:
-        ret = [Math.pow(2, src[0].min), Math.pow(2, src[0].max)];
+      case AluOp.Exp:
+        ret = [Math.exp(src[0].min), Math.exp(src[0].max)];
         break;
-      case AluOp.Log2:
-        ret = [Math.log2(src[0].min), Math.log2(src[0].max)];
+      case AluOp.Log:
+        ret = [Math.log(src[0].min), Math.log(src[0].max)];
         break;
       case AluOp.Reciprocal:
         if (src[0].min <= 0 && src[0].max >= 0) return [-Infinity, Infinity];
@@ -552,10 +552,10 @@ export class AluExp implements FpHashable {
           return Math.sin(x);
         case AluOp.Cos:
           return Math.cos(x);
-        case AluOp.Exp2:
-          return Math.pow(2, x);
-        case AluOp.Log2:
-          return Math.log2(x);
+        case AluOp.Exp:
+          return Math.exp(x);
+        case AluOp.Log:
+          return Math.log(x);
         case AluOp.Reciprocal:
           return 1 / x;
         case AluOp.Cast:
@@ -619,8 +619,8 @@ export class AluExp implements FpHashable {
     const UNARY_SYM: Partial<Record<AluOp, string>> = {
       [AluOp.Sin]: "sin",
       [AluOp.Cos]: "cos",
-      [AluOp.Exp2]: "exp2",
-      [AluOp.Log2]: "log2",
+      [AluOp.Exp]: "exp",
+      [AluOp.Log]: "log",
       [AluOp.Reciprocal]: "1/",
     };
 
@@ -721,8 +721,8 @@ export enum AluOp {
 
   Sin = "Sin",
   Cos = "Cos",
-  Exp2 = "Exp2",
-  Log2 = "Log2",
+  Exp = "Exp",
+  Log = "Log",
   Reciprocal = "Reciprocal",
   Cast = "Cast",
 
@@ -753,8 +753,8 @@ export const AluGroup = {
   Unary: new Set([
     AluOp.Sin,
     AluOp.Cos,
-    AluOp.Exp2,
-    AluOp.Log2,
+    AluOp.Exp,
+    AluOp.Log,
     AluOp.Reciprocal,
     AluOp.Cast,
   ]),
@@ -769,8 +769,8 @@ export const AluGroup = {
   RequiredFloat: new Set([
     AluOp.Sin,
     AluOp.Cos,
-    AluOp.Exp2,
-    AluOp.Log2,
+    AluOp.Exp,
+    AluOp.Log,
     AluOp.Reciprocal,
   ]),
 };
