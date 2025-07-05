@@ -262,14 +262,33 @@ function pipelineSource(device: GPUDevice, kernel: Kernel): ShaderInfo {
 
   const workgroupSize = findPow2(tune.threadCount, 256);
 
+  // Determine grid size, may need to be 3D due to limits on X.
+  // maxComputeWorkgroupsPerDimension ~ 65535, so we use 32768 when exceeded.
+  const gridSize = Math.ceil(tune.threadCount / workgroupSize);
+  let gridX = gridSize;
+  let gridY = 1;
+  if (gridSize > device.limits.maxComputeWorkgroupsPerDimension) {
+    gridX = 32768;
+    gridY = Math.ceil(gridSize / gridX);
+  }
+
   emit(
     "",
     `@compute @workgroup_size(${workgroupSize})`,
     "fn main(@builtin(global_invocation_id) id : vec3<u32>) {",
     pushIndent,
-    `if (id.x >= ${tune.threadCount}) { return; }`,
-    "let gidx: i32 = i32(id.x);",
   );
+  if (gridY === 1) {
+    emit(
+      `if (id.x >= ${tune.threadCount}) { return; }`,
+      "let gidx: i32 = i32(id.x);",
+    );
+  } else {
+    emit(
+      `if (${gridY} * id.x + id.y >= ${tune.threadCount}) { return; }`,
+      `let gidx: i32 = i32(${gridY} * id.x + id.y);`,
+    );
+  }
 
   // Generate code for each AluExp operation.
   // Some expressions may be used twice, so we keep track of them.
@@ -441,7 +460,7 @@ function pipelineSource(device: GPUDevice, kernel: Kernel): ShaderInfo {
   emit(popIndent, "}");
   return {
     shader: shader.join("\n"),
-    grid: [Math.ceil(tune.threadCount / workgroupSize), 1],
+    grid: [gridX, gridY],
   };
 }
 

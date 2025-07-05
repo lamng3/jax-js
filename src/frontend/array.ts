@@ -602,7 +602,9 @@ export class Array extends Tracer {
       await Promise.all(pending.map((p) => p.prepare()));
       for (const p of pending) p.submit();
     }
-    const buf = await this.#backend.read(this.#source as Slot);
+    // While the array is contiguous, it might not be the whole buffer.
+    const byteCount = 4 * prod(this.shape);
+    const buf = await this.#backend.read(this.#source as Slot, 0, byteCount);
     this.dispose();
     return this.dtype === DType.Float32
       ? new Float32Array(buf)
@@ -640,7 +642,9 @@ export class Array extends Tracer {
       p.prepareSync();
       p.submit();
     }
-    const buf = this.#backend.readSync(this.#source as Slot);
+    // While the array is contiguous, it might not be the whole buffer.
+    const byteCount = 4 * prod(this.shape);
+    const buf = this.#backend.readSync(this.#source as Slot, 0, byteCount);
     this.dispose();
     return this.dtype === DType.Float32
       ? new Float32Array(buf)
