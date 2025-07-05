@@ -30,6 +30,7 @@ import {
   reshape,
   ShapedArray,
   shrink,
+  stopGradient,
   Trace,
   Tracer,
   TracerValue,
@@ -844,16 +845,28 @@ export function vjp(
 }
 
 export function grad(f: (...primals: any) => Tracer) {
+  const valueAndGradFn = valueAndGrad(f);
   return (...x: any) => {
-    const [y, fVjp] = vjp(f, ...x);
+    const [y, dx] = valueAndGradFn(x);
+    y.dispose();
+    return dx;
+  };
+}
+
+export function valueAndGrad(f: (...primals: any) => Tracer) {
+  return (...x: any) => {
+    if (x.length === 0) {
+      throw new Error("grad requires at least one argument to differentiate");
+    }
+    // JAX convention, differentiate with respect to the first argument.
+    const [y, fVjp] = vjp(f, x[0], ...x.slice(1).map(stopGradient));
     if (!(y instanceof Tracer) || ndim(y) !== 0) {
       throw new TypeError("grad requires a scalar output");
     }
     if (y.dtype !== DType.Float32) {
       throw new TypeError("grad currently only supports float32");
     }
-    // JAX convention, differentiate with respect to the first argument.
-    return fVjp(pureArray(1))[0];
+    return [y, fVjp(pureArray(1))[0]] as [any, any];
   };
 }
 

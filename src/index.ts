@@ -98,6 +98,15 @@ export const grad = linearizeModule.grad as <
   ...primals: MapJsTree<Parameters<F>, ArrayLike, ArrayLike>
 ) => MapJsTree<Parameters<F>[0], ArrayLike, Array>;
 
+/** Create a function that evaluates both `f` and the gradient of `f`. */
+export const valueAndGrad = linearizeModule.valueAndGrad as <
+  F extends (...args: any[]) => JsTree<Array>,
+>(
+  f: WithArgsSubtype<F, JsTree<ArrayLike>>,
+) => (
+  ...primals: MapJsTree<Parameters<F>, ArrayLike, ArrayLike>
+) => [ReturnType<F>, MapJsTree<Parameters<F>[0], ArrayLike, Array>];
+
 /** Compute the Jacobian evaluated row-by-row by reverse-mode AD. */
 export const jacrev = linearizeModule.jacrev as typeof jacfwd;
 
