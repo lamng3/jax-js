@@ -90,7 +90,13 @@ export class CPUBackend implements Backend {
         ? new Float32Array(outputBuffers[0])
         : new Int32Array(outputBuffers[0]);
 
-    const globals = (gidx: number, bufidx: number) => inputArrays[gidx][bufidx];
+    const globals = (gid: number, bufidx: number) => {
+      if (gid < 0 || gid >= inputArrays.length)
+        throw new Error("gid out of bounds when evaluating: " + gid);
+      if (bufidx < 0 || bufidx >= inputArrays[gid].length)
+        throw new Error("bufidx out of bounds when evaluating: " + bufidx);
+      inputArrays[gid][bufidx];
+    };
     if (!kernel.reduction) {
       for (let i = 0; i < kernel.size; i++) {
         outputArray[i] = exp.evaluate({ gidx: i }, globals);
