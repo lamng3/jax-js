@@ -30,6 +30,7 @@ import {
   pad,
   Primitive,
   PrimitiveParams,
+  randomBits,
   reciprocal,
   reduce,
   reshape,
@@ -145,6 +146,11 @@ const jvpRules: { [P in Primitive]: JvpRule<P> } = {
     if (x.dtype === dtype) return [[x], [dx]]; // No-op if dtype is the same.
     dx.dispose(); // Non-differentiable operation.
     return [[bitcast(x, dtype)], [zerosLike(x)]];
+  },
+  [Primitive.RandomBits]([k0, k1], [dk0, dk1], { shape }) {
+    dk0.dispose(), dk1.dispose();
+    const x = randomBits(k0, k1, shape);
+    return [[x], [zerosLike(x)]];
   },
   [Primitive.Sin]([x], [dx]) {
     return [[sin(x.ref)], [cos(x).mul(dx)]];

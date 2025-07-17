@@ -1,6 +1,6 @@
 // Handle JitCall operations by translating Jaxprs into dispatched Kernels.
 
-import { AluExp, AluOp, AluVar, Kernel, Reduction } from "../alu";
+import { AluExp, AluOp, AluVar, DType, Kernel, Reduction } from "../alu";
 import { Backend, Slot } from "../backend";
 import { PPrint } from "../pprint";
 import { ShapeTracker, unravelAlu } from "../shape";
@@ -391,6 +391,22 @@ type JitRule<P extends Primitive> = (
   params: PrimitiveParams<P>,
 ) => Kernel;
 
+function reshapeViews(
+  exp: AluExp,
+  mapping: (st: ShapeTracker) => ShapeTracker | undefined,
+): AluExp {
+  return exp.rewrite((exp) => {
+    if (exp.op === AluOp.GlobalView) {
+      const [gid, st]: [number, ShapeTracker] = exp.arg;
+      const newSt = mapping(st);
+      if (newSt) {
+        const indices = unravelAlu(newSt.shape, AluVar.gidx);
+        return AluExp.globalView(exp.dtype, gid, newSt, indices);
+      }
+    }
+  });
+}
+
 // JIT handler for a broadcasted operation on at least 1 input.
 function broadcastedJit<P extends Primitive>(
   fn: (exps: AluExp[], params: PrimitiveParams<P>) => AluExp,
@@ -403,18 +419,12 @@ function broadcastedJit<P extends Primitive>(
     // Only GlobalView is affected. GlobalIndex is not used here, and neither is
     // AluVar.idx, since those are realized before jit().
     exps = exps.map((exp) =>
-      exp.rewrite((exp) => {
-        if (exp.op === AluOp.GlobalView) {
-          let [gid, st]: [number, ShapeTracker] = exp.arg;
-          if (!deepEqual(st.shape, newShape)) {
-            st = st.broadcast(
-              newShape,
-              range(newShape.length - st.shape.length),
-            );
-            const indices = unravelAlu(st.shape, AluVar.gidx);
-            return AluExp.globalView(exp.dtype, gid, st, indices);
-          }
-        }
+      reshapeViews(exp, (st) => {
+        if (!deepEqual(st.shape, newShape))
+          return st.broadcast(
+            newShape,
+            range(newShape.length - st.shape.length),
+          );
       }),
     );
 
@@ -437,15 +447,8 @@ function reshapeJit<P extends Primitive>(
   fn: (st: ShapeTracker, params: PrimitiveParams<P>) => ShapeTracker,
 ): JitRule<P> {
   return (nargs, [a], [as], params) => {
+    a = reshapeViews(a, (st) => fn(st, params));
     const newShape = fn(ShapeTracker.fromShape(as.shape), params).shape;
-    a = a.rewrite((exp) => {
-      if (exp.op === AluOp.GlobalView) {
-        const [gid, st]: [number, ShapeTracker] = exp.arg;
-        const newSt = fn(st, params);
-        const indices = unravelAlu(newSt.shape, AluVar.gidx);
-        return AluExp.globalView(exp.dtype, gid, newSt, indices);
-      }
-    });
     return new Kernel(nargs, prod(newShape), a);
   };
 }
@@ -459,6 +462,18 @@ const jitRules: { [P in Primitive]: JitRule<P> } = {
   [Primitive.StopGradient]: unopJit((a) => a), // No-op, just return the input.
   [Primitive.Cast]: unopJit((a, { dtype }) => AluExp.cast(dtype, a)),
   [Primitive.Bitcast]: unopJit((a, { dtype }) => AluExp.bitcast(dtype, a)),
+  [Primitive.RandomBits]: (nargs, keys, keyShapes, { shape }) => {
+    const mapping = (st: ShapeTracker) => {
+      if (!deepEqual(st.shape, shape))
+        return st.broadcast(shape, range(shape.length - st.shape.length));
+    };
+    const k0 = reshapeViews(keys[0], mapping);
+    const k1 = reshapeViews(keys[1], mapping);
+    const c0 = AluExp.u32(0);
+    const c1 = AluExp.cast(DType.Uint32, AluVar.gidx);
+    const exp = AluExp.threefry2x32(c0, c1, k0, k1);
+    return new Kernel(nargs, prod(shape), exp);
+  },
   [Primitive.Sin]: unopJit(AluExp.sin),
   [Primitive.Cos]: unopJit(AluExp.cos),
   [Primitive.Exp]: unopJit(AluExp.exp),

@@ -7,7 +7,14 @@ import {
   flatten as treeFlatten,
   unflatten as treeUnflatten,
 } from "../tree";
-import { FpHash, FpHashable, runWithCache, unzip2, zip } from "../utils";
+import {
+  deepEqual,
+  FpHash,
+  FpHashable,
+  runWithCache,
+  unzip2,
+  zip,
+} from "../utils";
 import { Array, generalBroadcast, pureArray, scalar } from "./array";
 import {
   bind,
@@ -697,6 +704,23 @@ export const abstractEvalRules: { [P in Primitive]: AbstractEvalRule<P> } = {
       );
     }
     return [new ShapedArray(x.shape, dtype)];
+  },
+  [Primitive.RandomBits](
+    [k0, k1]: ShapedArray[],
+    { shape }: { shape: number[] },
+  ) {
+    if (k0.dtype !== DType.Uint32 || k1.dtype !== DType.Uint32) {
+      throw new TypeError(
+        `RandomBits requires uint32 keys, got ${k0.dtype} and ${k1.dtype}`,
+      );
+    }
+    const keyShape = generalBroadcast(k0.shape, k1.shape);
+    if (!deepEqual(generalBroadcast(keyShape, shape), shape)) {
+      throw new TypeError(
+        `Keys of shapes ${k0.shape} and ${k1.shape} cannot be broadcast to shape ${shape}`,
+      );
+    }
+    return [new ShapedArray(shape, DType.Uint32)];
   },
   [Primitive.Sin]: vectorizedUnopAbstractEval,
   [Primitive.Cos]: vectorizedUnopAbstractEval,

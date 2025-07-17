@@ -105,6 +105,9 @@ export class AluExp implements FpHashable {
     if (a.dtype === dtype) return a;
     return new AluExp(AluOp.Bitcast, dtype, [a]);
   }
+  static threefry2x32(k0: AluExp, k1: AluExp, c0: AluExp, c1: AluExp): AluExp {
+    return new AluExp(AluOp.Threefry2x32, DType.Uint32, [k0, k1, c0, c1]);
+  }
   static cmplt(a: AluExp, b: AluExp): AluExp {
     return new AluExp(AluOp.Cmplt, DType.Bool, [a, b]);
   }

@@ -1,6 +1,20 @@
 import { numpy as np, random } from "@jax-js/jax";
 import { expect, test } from "vitest";
 
+test("random bits", () => {
+  // jax.random.bits(jax.random.key(0))
+  const x = random.bits(random.key(0));
+  expect(x.shape).toEqual([]);
+  expect(x.dtype).toEqual(np.uint32);
+  expect(x.js()).toEqual(4070199207);
+
+  // jax.random.bits(jax.random.key(0), shape=(4,))
+  const y = random.bits(random.key(10), [4]);
+  expect(y.shape).toEqual([4]);
+  expect(y.dtype).toEqual(np.uint32);
+  expect(y.js()).toEqual([169096361, 1572511259, 2689743692, 2228103506]);
+});
+
 test("generate uniform random", () => {
   const key = random.key(0);
   const [a, b, c] = random.split(key, 3);

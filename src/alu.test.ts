@@ -159,6 +159,6 @@ test("AluOp.Threefry2x32", () => {
   const k1 = AluExp.u32(0);
   const c0 = AluExp.u32(0);
   const c1 = AluExp.u32(0);
-  const exp = new AluExp(AluOp.Threefry2x32, DType.Uint32, [k0, k1, c0, c1]);
+  const exp = AluExp.threefry2x32(k0, k1, c0, c1);
   expect(exp.evaluate({})).toBe(1797259609 ^ 2579123966); // x0 ^ x1
 });

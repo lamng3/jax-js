@@ -29,7 +29,7 @@ export enum Primitive {
   StopGradient = "stop_gradient",
   Cast = "cast",
   Bitcast = "bitcast",
-  // RandomBits = "random_bits", // TODO - via threefry2x32
+  RandomBits = "random_bits",
   Sin = "sin",
   Cos = "cos",
   Exp = "exp",
@@ -57,6 +57,7 @@ interface PrimitiveParamsImpl
   [Primitive.Compare]: { op: CompareOp };
   [Primitive.Transpose]: { perm: number[] };
   [Primitive.Broadcast]: { shape: number[]; axis: number[] };
+  [Primitive.RandomBits]: { shape: number[] };
   [Primitive.Reshape]: { shape: number[] };
   [Primitive.Flip]: { axis: number[] };
   [Primitive.Shrink]: { slice: [number, number][] };
@@ -110,6 +111,10 @@ export function cast(x: TracerValue, dtype: DType) {
 
 export function bitcast(x: TracerValue, dtype: DType) {
   return bind1(Primitive.Bitcast, [x], { dtype });
+}
+
+export function randomBits(k0: Tracer, k1: Tracer, shape: number[]) {
+  return bind1(Primitive.RandomBits, [k0, k1], { shape });
 }
 
 export function sin(x: TracerValue) {
