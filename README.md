@@ -90,12 +90,12 @@ npm test
 - [x] `jit()` support via Jaxprs and kernel fusion
 - [x] We figure out the `dispose()` / refcount / linear types stuff
   - [ ] `dispose()` for saved "const" tracers in Jaxprs
-  - [ ] Garbage collection for JIT programs, maybe needs to be moved off-device
+  - [ ] Garbage collection for JIT programs
   - [ ] Memory scheduling, buffer allocation (can be tricky)
 - [ ] Demos: Navier-Stokes, neural networks, statistics
-- [ ] Features for neural networks
+- [x] Features for neural networks
   - [ ] Convolution
-  - [ ] Random and initializers
+  - [x] Random and initializers
   - [ ] Optimizers (optax package?)
 - [ ] Wasm backend (needs malloc)
   - [ ] SIMD support for Wasm backend
