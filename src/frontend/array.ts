@@ -1065,28 +1065,29 @@ type ImplRule<P extends Primitive> = (
 ) => Array[];
 const implRules: { [P in Primitive]: ImplRule<P> } = Array._implRules();
 
-export function zerosLike(val: TracerValue): Array {
+export function zerosLike(val: TracerValue, dtype?: DType): Array {
   const aval = getAval(val);
   if (val instanceof Tracer) val.dispose();
   // TODO: Use correct device.
-  return zeros(aval.shape, { dtype: aval.dtype });
+  return zeros(aval.shape, { dtype: dtype ?? aval.dtype });
 }
 
-export function onesLike(val: TracerValue): Array {
+export function onesLike(val: TracerValue, dtype?: DType): Array {
   const aval = getAval(val);
   if (val instanceof Tracer) val.dispose();
   // TODO: Use correct device.
-  return ones(aval.shape, { dtype: aval.dtype });
+  return ones(aval.shape, { dtype: dtype ?? aval.dtype });
 }
 
 export function fullLike(
   val: TracerValue,
   fillValue: number | boolean | Array,
+  dtype?: DType,
 ): Array {
   const aval = getAval(val);
   if (val instanceof Tracer) val.dispose();
   // TODO: Use correct device.
-  return full(aval.shape, fillValue, { dtype: aval.dtype });
+  return full(aval.shape, fillValue, { dtype: dtype ?? aval.dtype });
 }
 
 /** Return a new array of given shape and type, filled with zeros. */

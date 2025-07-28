@@ -1,3 +1,9 @@
-import { numpy as np } from "@jax-js/jax";
-
-export const x: np.Array = np.array([1, 2, 3]);
+export { adam, sgd } from "./alias";
+export {
+  applyUpdates,
+  type GradientTransformation,
+  identity,
+  setToZero,
+} from "./base";
+export { l2Loss, squaredError } from "./losses";
+export { scaleByAdam, type ScaleByAdamOptions } from "./transform";

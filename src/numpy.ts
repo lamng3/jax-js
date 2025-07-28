@@ -147,15 +147,22 @@ export const ndim = core.ndim as (x: ArrayLike) => number;
 export const shape = core.getShape as (x: ArrayLike) => number[];
 
 /** Return an array of zeros with the same shape and type as a given array. */
-export const zerosLike = zerosLikeUnfudged as (a: ArrayLike) => Array;
+export const zerosLike = zerosLikeUnfudged as (
+  a: ArrayLike,
+  dtype?: DType,
+) => Array;
 
 /** Return an array of ones with the same shape and type as a given array. */
-export const onesLike = onesLikeUnfudged as (a: ArrayLike) => Array;
+export const onesLike = onesLikeUnfudged as (
+  a: ArrayLike,
+  dtype?: DType,
+) => Array;
 
 /** Return a full array with the same shape and type as a given array. */
 export const fullLike = fullLikeUnfudged as (
   a: ArrayLike,
   fillValue: number | boolean | Array,
+  dtype?: DType,
 ) => Array;
 
 /**

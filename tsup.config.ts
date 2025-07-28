@@ -8,7 +8,6 @@ const watchMode = process.env.TSUP_WATCH_MODE === "1";
 const opts: Options = {
   // Externalize all imports by default, except for runtime helpers generated
   // by the compiler / bundler toolchain.
-  entry: ["src/index.ts"],
   external: [/^[^./]/],
   format: ["cjs", "esm"],
   platform: "browser",
@@ -19,12 +18,16 @@ const opts: Options = {
 export default defineConfig([
   {
     name: "jax",
+    entry: ["src/index.ts"],
+    outDir: "dist",
     ...opts,
     watch: watchMode && "src",
   },
 
   ...(await readdir("packages")).map((pkg) => ({
     name: pkg,
+    entry: [`packages/${pkg}/src/index.ts`],
+    outDir: `packages/${pkg}/dist`,
     ...opts,
     cwd: `packages/${pkg}`,
     watch: watchMode && `packages/${pkg}/src`, // Unaffected by cwd.

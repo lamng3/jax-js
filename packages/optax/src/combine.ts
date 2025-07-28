@@ -1,0 +1,38 @@
+import { tree } from "@jax-js/jax";
+
+import { GradientTransformation, OptState } from "./base";
+
+/** Applies a list of chainable update transformations. */
+export function chain(
+  ...transforms: GradientTransformation[]
+): GradientTransformation {
+  const initFns = transforms.map((t) => t.init);
+  const updateFns = transforms.map((t) => t.update);
+  return {
+    init(params) {
+      const states = initFns.map((fn) => fn(tree.ref(params)));
+      tree.dispose(params);
+      return states;
+    },
+    update(updates, state, params) {
+      state = state as OptState[];
+      if (updateFns.length !== state.length) {
+        throw new Error(
+          `Expected ${updateFns.length} states, got ${state.length}. Make sure you called init first!`,
+        );
+      }
+      const newState: OptState[] = [];
+      for (let i = 0; i < updateFns.length; i++) {
+        let newS: OptState;
+        [updates, newS] = updateFns[i](
+          updates,
+          state[i],
+          params ? tree.ref(params) : undefined,
+        );
+        newState.push(newS);
+      }
+      tree.dispose(params);
+      return [updates, newState];
+    },
+  };
+}
