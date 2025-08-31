@@ -268,7 +268,14 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
   }
 
   class JaxJsStrategy extends Strategy {
-    name = "jax-js";
+    name: string;
+    fp16: boolean;
+
+    constructor(fp16: boolean = false) {
+      super();
+      this.fp16 = fp16;
+      this.name = fp16 ? "jax-js-fp16" : "jax-js";
+    }
 
     async run(): Promise<number> {
       const jax = await import("@jax-js/jax");
@@ -276,12 +283,16 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
       jax.setDevice("webgpu");
       const np = jax.numpy;
 
-      const input = np.array(randomInput, {
-        shape: [batchSize, channels, height, width],
-      });
-      const filter = np.array(randomFilter, {
-        shape: [outChannels, channels, filterHeight, filterWidth],
-      });
+      const input = np
+        .array(randomInput, {
+          shape: [batchSize, channels, height, width],
+        })
+        .astype(this.fp16 ? np.float16 : np.float32);
+      const filter = np
+        .array(randomFilter, {
+          shape: [outChannels, channels, filterHeight, filterWidth],
+        })
+        .astype(this.fp16 ? np.float16 : np.float32);
       await Promise.all([input.ref.wait(), filter.ref.wait()]);
 
       const start = performance.now();
@@ -308,6 +319,7 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
     new NaiveStrategy(32),
     new TfjsStrategy(),
     new JaxJsStrategy(),
+    new JaxJsStrategy(true),
   ];
 
   const strategies = Object.fromEntries(strategiesList.map((s) => [s.name, s]));

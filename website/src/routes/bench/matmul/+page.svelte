@@ -9,7 +9,7 @@
     [...new Array(n * n)].map(() => Math.random()),
   );
 
-  function printBufferItems(buf: Float32Array) {
+  function printBufferItems(buf: Float32Array | Float16Array) {
     // Print a couple items from the buffer.
     console.log(
       buf[0],
@@ -697,7 +697,14 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
   }
 
   class JaxJsStrategy extends Strategy {
-    name = "jax-js";
+    name: string;
+    fp16: boolean;
+
+    constructor(fp16: boolean = false) {
+      super();
+      this.fp16 = fp16;
+      this.name = fp16 ? "jax-js-fp16" : "jax-js";
+    }
 
     async run(): Promise<number> {
       const jax = await import("@jax-js/jax");
@@ -705,14 +712,18 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
       jax.setDevice("webgpu");
       const np = jax.numpy;
 
-      const a = np.array(randomBuffer, { shape: [n, n] });
-      const b = np.array(randomBuffer, { shape: [n, n] });
+      const a = np
+        .array(randomBuffer, { shape: [n, n] })
+        .astype(this.fp16 ? np.float16 : np.float32);
+      const b = np
+        .array(randomBuffer, { shape: [n, n] })
+        .astype(this.fp16 ? np.float16 : np.float32);
       await Promise.all([a.ref.wait(), b.ref.wait()]); // Make sure tensors are ready.
 
       performance.mark("jax-start");
       const start = performance.now();
       const c = np.dot(a, b);
-      const ar = (await c.data()) as Float32Array;
+      const ar = (await c.data()) as Float16Array;
       printBufferItems(ar);
       const time = performance.now() - start;
       performance.mark("jax-end");
@@ -739,6 +750,7 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
     new Unroll4x4Strategy(16, 16),
     new TfjsStrategy(),
     new JaxJsStrategy(),
+    new JaxJsStrategy(true),
   ];
 
   const strategies = Object.fromEntries(strategiesList.map((s) => [s.name, s]));
