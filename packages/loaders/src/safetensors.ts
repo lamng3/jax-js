@@ -35,6 +35,7 @@ export type TensorData =
 export type File = {
   tensors: { [key: string]: Tensor };
   metadata?: Record<string, string>;
+  totalSize: number;
 };
 
 /** Load data from a safetensors file. */
@@ -50,7 +51,7 @@ export function parse(data: Uint8Array | ArrayBuffer): File {
   }
 
   if (len < 8) throw new Error("Data too short to be a valid safetensors file");
-  const view = new DataView(buffer, ptr, len);
+  const view = new DataView(buffer, ptr, 8);
 
   const headerSize = view.getBigUint64(0, true);
   if (headerSize > BigInt(len - 8)) throw new Error("Invalid header size");
@@ -66,7 +67,7 @@ export function parse(data: Uint8Array | ArrayBuffer): File {
     throw new Error(`Failed to parse safetensors header as JSON: ${error}`);
   }
 
-  const file: File = { tensors: {} };
+  const file: File = { tensors: {}, totalSize: len };
   for (const [key, value] of Object.entries(header)) {
     if (key === "__metadata__") {
       file.metadata = value as Record<string, string>;

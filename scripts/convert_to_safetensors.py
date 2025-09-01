@@ -55,6 +55,27 @@ def get_tensor_size(tensor) -> int:
     return tensor.numel() * tensor.element_size()
 
 
+def calculate_mean_relative_deviation(
+    original: torch.Tensor, converted: torch.Tensor
+) -> float:
+    """Calculate mean relative deviation between original and converted tensors"""
+    if original.shape != converted.shape:
+        return float("inf")
+
+    # Convert to float for calculation
+    orig_float = original.float()
+    conv_float = converted.float()
+
+    # Calculate |new - old| and |old|
+    abs_diff = torch.abs(conv_float - orig_float).sum()
+    abs_orig = torch.abs(orig_float).sum()
+
+    if abs_orig == 0:
+        return 0.0
+
+    return (abs_diff / abs_orig).item()
+
+
 def format_size(size_bytes: int) -> str:
     """Format size in bytes to human readable string"""
     for unit in ["B", "KB", "MB", "GB"]:
@@ -218,7 +239,9 @@ def display_dtype_summary(
     console.print(table)
 
 
-def build_tree_structure(tensors: Dict[str, torch.Tensor]) -> Dict[str, Any]:
+def build_tree_structure(
+    tensors: Dict[str, torch.Tensor], original_tensors: Dict[str, torch.Tensor] = None
+) -> Dict[str, Any]:
     """Build hierarchical structure from flat tensor names"""
     tree = {}
 
@@ -226,18 +249,26 @@ def build_tree_structure(tensors: Dict[str, torch.Tensor]) -> Dict[str, Any]:
         parts = name.split(".")
         current = tree
 
-        for i, part in enumerate(parts[:-1]):
+        for part in parts[:-1]:
             if part not in current:
                 current[part] = {"_children": {}, "_size": 0}
             current = current[part]["_children"]
 
         final_part = parts[-1]
         tensor_size = get_tensor_size(tensor)
+
+        # Calculate deviation if original tensor is provided
+        deviation = None
+        if original_tensors and name in original_tensors:
+            original_tensor = original_tensors[name]
+            deviation = calculate_mean_relative_deviation(original_tensor, tensor)
+
         current[final_part] = {
             "_tensor": tensor,
             "_size": tensor_size,
             "_shape": list(tensor.shape),
             "_dtype": str(tensor.dtype).replace("torch.", ""),
+            "_deviation": deviation,
         }
 
     def calculate_sizes(node):
@@ -245,7 +276,7 @@ def build_tree_structure(tensors: Dict[str, torch.Tensor]) -> Dict[str, Any]:
             return node["_size"]
 
         total_size = 0
-        for key, child in node.get("_children", {}).items():
+        for child in node.get("_children", {}).values():
             child_size = calculate_sizes(child)
             total_size += child_size
 
@@ -258,25 +289,32 @@ def build_tree_structure(tensors: Dict[str, torch.Tensor]) -> Dict[str, Any]:
 
 def add_tree_nodes(tree: CompactTree, structure: Dict[str, Any], parent_name: str = ""):
     """Recursively add nodes to rich tree"""
-    for name, data in structure.items():
-        if name.startswith("_"):
+    for tensor_name, data in structure.items():
+        if tensor_name.startswith("_"):
             continue
 
-        full_name = f"{parent_name}.{name}" if parent_name else name
+        full_name = f"{parent_name}.{tensor_name}" if parent_name else tensor_name
         size_bytes = data["_size"]
         size_str = format_size(size_bytes) if size_bytes >= 1024 * 1024 else ""
 
         if "_tensor" in data:
             shape_str = "x".join(map(str, data["_shape"]))
             dtype_str = data["_dtype"]
-            label = Text(f"{name} ", style="bold blue")
+            label = Text(f"{tensor_name} ", style="bold blue")
             label.append(f"[{shape_str}] ", style="dim")
             label.append(f"{dtype_str} ", style="green")
             if size_str:
                 label.append(f"({size_str})", style="yellow")
+
+            # Add deviation in red if > 1%
+            if data.get("_deviation") is not None:
+                deviation = data["_deviation"]
+                if deviation > 0.01:  # 1%
+                    label.append(f" [deviation: {deviation:.2%}]", style="bold red")
+
             tree.add(label)
         else:
-            label = Text(f"{name}/ ", style="bold magenta")
+            label = Text(f"{tensor_name}/ ", style="bold magenta")
             if size_str:
                 label.append(f"({size_str})", style="yellow")
             branch = tree.add(label)
@@ -284,10 +322,12 @@ def add_tree_nodes(tree: CompactTree, structure: Dict[str, Any], parent_name: st
 
 
 def display_tensor_tree(
-    tensors: Dict[str, torch.Tensor], title: str = "Tensor Structure"
+    tensors: Dict[str, torch.Tensor],
+    title: str = "Tensor Structure",
+    original_tensors: Dict[str, torch.Tensor] = None,
 ):
     """Display tensors as a tree with hierarchy and sizes"""
-    structure = build_tree_structure(tensors)
+    structure = build_tree_structure(tensors, original_tensors)
 
     total_size = sum(get_tensor_size(tensor) for tensor in tensors.values())
     tree = CompactTree(
@@ -361,7 +401,11 @@ def convert(
 
         if show_output:
             console.print()
-            display_tensor_tree(tensors, f"Output: {output_file.name}")
+            # Pass original tensors for deviation calculation if conversion was applied
+            original_for_comparison = original_tensors if convert else None
+            display_tensor_tree(
+                tensors, f"Output: {output_file.name}", original_for_comparison
+            )
 
         console.print(f"\n[green]✓ Successfully converted to {output_file}[/green]")
 
