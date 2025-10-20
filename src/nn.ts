@@ -9,11 +9,13 @@ import {
   clip,
   DType,
   exp,
+  less,
   log,
   max,
   maximum,
   negative,
   reciprocal,
+  where,
 } from "./numpy";
 import { range } from "./utils";
 
@@ -97,6 +99,12 @@ export function logSigmoid(x: ArrayLike): Array {
 
 /** Identity activation function. Returns the argument unmodified. */
 export const identity = fudgeArray;
+
+/** Leaky rectified linear (ReLU) activation function */
+export function leakyRelu(x: ArrayLike, negativeSlope: number = 0.01): Array {
+  x = fudgeArray(x);
+  return where(less(x.ref, 0), x.ref.mul(negativeSlope), x);
+}
 
 /**
  * Softmax function. Computes the function which rescales elements to the range

@@ -55,6 +55,27 @@ suite.each(devices)("device:%s", (device) => {
     });
   });
 
+  suite("jax.nn.leakyRelu()", () => {
+    test("works for positive and negative values", () => {
+      const x = np.array([-100, -10, -1, 0, 1, 5, 10]);
+      const y = nn.leakyRelu(x);
+      expect(y).toBeAllclose([-1, -0.1, -0.01, 0, 1, 5, 10]);
+    });
+
+    test("takes in alpha as second param", () => {
+      const x = np.array([-100, -10, -1, 0, 1, 5, 10]);
+      const y = nn.leakyRelu(x, 0.2);
+      expect(y).toBeAllclose([-20, -2, -0.2, 0, 1, 5, 10]);
+    });
+
+    test("has correct gradient", () => {
+      const x = np.array([-10, -1, 1, 2]);
+      const gradFn = grad((x: np.Array) => nn.leakyRelu(x).sum());
+      const gx = gradFn(x);
+      expect(gx).toBeAllclose([0.01, 0.01, 1, 1]);
+    });
+  });
+
   suite("jax.nn.softmax()", () => {
     test("should compute softmax", () => {
       const x = np.array([
