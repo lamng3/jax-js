@@ -1,7 +1,7 @@
 // Common functions for neural network libraries, mirroring `jax.nn` in JAX.
 
 import { eye, fudgeArray, ones, zeros } from "./frontend/array";
-import { broadcast, stopGradient } from "./frontend/core";
+import { broadcast, shrink, stopGradient } from "./frontend/core";
 import {
   absolute,
   Array,
@@ -15,9 +15,11 @@ import {
   maximum,
   negative,
   reciprocal,
+  tanh,
   where,
 } from "./numpy";
-import { range } from "./utils";
+import { Pair } from "./shape";
+import { checkAxis, range } from "./utils";
 
 /**
  * Rectified Linear Unit (ReLU) activation function:
@@ -104,6 +106,60 @@ export const identity = fudgeArray;
 export function leakyRelu(x: ArrayLike, negativeSlope: number = 0.01): Array {
   x = fudgeArray(x);
   return where(less(x.ref, 0), x.ref.mul(negativeSlope), x);
+}
+
+/**
+ * Exponential linear unit activation function.
+ *
+ * Computes the element-wise function:
+ * `elu(x) = x > 0 ? x : alpha * (exp(x) - 1)`
+ */
+export function elu(x: ArrayLike, alpha: number = 1.0): Array {
+  x = fudgeArray(x);
+  return where(less(x.ref, 0), exp(x.ref).sub(1).mul(alpha), x);
+}
+
+/**
+ * Continuously-differentiable exponential linear unit activation function.
+ *
+ * Computes the element-wise function:
+ * `celu(x) = x > 0 ? x : alpha * (exp(x/alpha) - 1)`
+ */
+export function celu(x: ArrayLike, alpha: number = 1.0): Array {
+  x = fudgeArray(x);
+  return where(less(x.ref, 0), exp(x.ref.div(alpha)).sub(1).mul(alpha), x);
+}
+
+/**
+ * Gated linear unit (GLU) activation function.
+ *
+ * Splits the `axis` dimension of the input into two halves, a and b, then
+ * computes `a * sigmoid(b)`.
+ */
+export function glu(x: ArrayLike, axis: number = -1): Array {
+  x = fudgeArray(x);
+  axis = checkAxis(axis, x.ndim);
+  const size = x.shape[axis];
+  if (size % 2 !== 0) {
+    throw new Error(
+      `glu: axis ${axis} of shape (${x.shape}) does not have even length`,
+    );
+  }
+  const slice = x.shape.map<Pair>((a) => [0, a]);
+  const a = shrink(x.ref, slice.toSpliced(axis, 1, [0, size / 2])) as Array;
+  const b = shrink(x, slice.toSpliced(axis, 1, [size / 2, size])) as Array;
+  return a.mul(sigmoid(b));
+}
+
+/**
+ * Mish activation function.
+ *
+ * Computes the element-wise function:
+ * `mish(x) = x * tanh(softplus(x))`
+ */
+export function mish(x: ArrayLike): Array {
+  x = fudgeArray(x);
+  return x.ref.mul(tanh(softplus(x)));
 }
 
 /**
