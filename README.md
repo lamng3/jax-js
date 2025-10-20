@@ -65,7 +65,7 @@ pnpm test
 
 ## Next on Eric's mind
 
-- Add GELU activation and erf() primitive
+- Finish CLIP inference demo and associated features (depthwise convolution, vmap of gather, etc.)
 - Fix jit-of-grad returning very incorrect result
 - Probably add static_argnums to jit() so that clip and some nn functions have jit added
 - Improve perf of MNIST neural network
