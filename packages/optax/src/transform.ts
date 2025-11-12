@@ -34,7 +34,7 @@ export function scaleByAdam({
 }: ScaleByAdamOptions = {}): GradientTransformation {
   return {
     init(params) {
-      const mu = treeZerosLike(params); // first moment
+      const mu = treeZerosLike(tree.ref(params)); // first moment
       const nu = treeZerosLike(params); // second moment
       return { count: u32(0), mu, nu };
     },
@@ -59,6 +59,7 @@ export function scaleByAdam({
         muHat = treeBiasCorrection(tree.ref(mu), b1, count.ref);
       }
       const nuHat = treeBiasCorrection(tree.ref(nu), b2, count.ref);
+      tree.dispose(updates);
       updates = tree.map(
         (m: np.Array, v: np.Array) => m.div(np.sqrt(v.add(epsRoot)).add(eps)),
         muHat,

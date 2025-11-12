@@ -5,6 +5,7 @@ Utility package for `jax-js` that can load tensors from various formats and cach
 - [OPFS](#opfs)
 - [Safetensors](#safetensors)
 - [Tokenizers](#tokenizers)
+- [WeightMapper](#weightmapper)
 
 This has no dependencies and can be used independently of the main `@jax-js/jax` library.
 
