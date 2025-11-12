@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { building } from "$app/environment";
   import { goto } from "$app/navigation";
   import { base } from "$app/paths";
   import { page } from "$app/state";
@@ -35,7 +36,7 @@
   ];
 
   function getSampleFromUrl(url: URL) {
-    const str = url.searchParams.get("sample") ?? "0";
+    const str = building ? "0" : (url.searchParams.get("sample") ?? "0");
     const i = parseInt(str);
     if (Number.isInteger(i) && i >= 0 && i < codeSamples.length) return i;
     return 0;
