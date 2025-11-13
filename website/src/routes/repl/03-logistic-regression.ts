@@ -34,7 +34,7 @@ const steps = 100;
 const solver = sgd(0.2);
 
 let w = np.zerosLike(wTrue.ref);
-let optState = solver.init(w.ref.ref);
+let optState = solver.init(w.ref);
 let updates: typeof w;
 
 for (let step = 0; step < steps; step++) {
