@@ -4,6 +4,7 @@
   import { base } from "$app/paths";
   import { page } from "$app/state";
 
+  import type { Device } from "@jax-js/jax";
   import { SplitPane } from "@rich_harris/svelte-split-pane";
   import type { Plugin } from "@rollup/browser";
   import {
@@ -14,7 +15,6 @@
     LoaderIcon,
     PaletteIcon,
     PlayIcon,
-    TerminalIcon,
     X,
   } from "lucide-svelte";
 
@@ -44,6 +44,7 @@
   }
 
   let selected = $state(getSampleFromUrl(page.url));
+  let device: Device = $state("webgpu");
   let replEditor: ReplEditor;
 
   $effect(() => {
@@ -87,10 +88,10 @@
     mockConsole.clear();
 
     const devices = await jax.init();
-    if (devices.includes("webgpu")) {
-      jax.setDevice("webgpu");
+    if (devices.includes(device)) {
+      jax.setDevice(device);
     } else {
-      mockConsole.warn(`WebGPU not supported, falling back to Wasm`);
+      mockConsole.warn(`${device} not supported, falling back to Wasm`);
       jax.setDevice("wasm");
     }
 
@@ -347,6 +348,16 @@
                 <PaletteIcon size={14} class="mr-1.5" />
                 Format
               </button>
+
+              <!-- Device selector -->
+              <select
+                bind:value={device}
+                class="ml-auto border border-gray-300 rounded-md text-sm px-1 py-0.5"
+              >
+                <option value="webgpu">WebGPU</option>
+                <option value="wasm">Wasm</option>
+                <option value="cpu">CPU (slow)</option>
+              </select>
             </div>
             <!-- <div class="ml-4 text-sm text-gray-700 pb-1 flex items-center">
               <FileIcon size={14} class="mr-1 text-sky-600" /> index.ts
