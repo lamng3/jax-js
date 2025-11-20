@@ -933,4 +933,41 @@ suite.each(devices)("device:%s", (device) => {
       expect(np.tanh(Infinity).js()).toEqual(1);
     });
   });
+
+  suite("jax.numpy.repeat()", () => {
+    test("repeats elements of 1D array", () => {
+      const x = np.array([1, 2, 3]);
+      const y = np.repeat(x, 2);
+      expect(y.js()).toEqual([1, 1, 2, 2, 3, 3]);
+    });
+
+    test("repeats elements of 2D array along axis", () => {
+      const x = np.array([
+        [1, 2],
+        [3, 4],
+      ]);
+      const y = np.repeat(x.ref, 2, 0);
+      expect(y.js()).toEqual([
+        [1, 2],
+        [1, 2],
+        [3, 4],
+        [3, 4],
+      ]);
+
+      const z = np.repeat(x, 3, 1);
+      expect(z.js()).toEqual([
+        [1, 1, 1, 2, 2, 2],
+        [3, 3, 3, 4, 4, 4],
+      ]);
+    });
+
+    test("flattens input when axis is null", () => {
+      const x = np.array([
+        [1, 2],
+        [3, 4],
+      ]);
+      const y = np.repeat(x, 2);
+      expect(y.js()).toEqual([1, 1, 2, 2, 3, 3, 4, 4]);
+    });
+  });
 });

@@ -473,12 +473,37 @@ export function fliplr(x: ArrayLike): Array {
   return flip(x, 1);
 }
 
-// Alternate or equivalent names for functions, from numpy.
+/** Alternative name for `numpy.transpose()`. */
 export const permuteDims = transpose;
 
 /** Return a 1-D flattened array containing the elements of the input. */
 export function ravel(a: ArrayLike): Array {
   return fudgeArray(a).ravel();
+}
+
+/**
+ * Repeat each element of an array after themselves.
+ *
+ * If no axis is provided, use the flattened input array, and return a flat
+ * output array.
+ */
+export function repeat(a: ArrayLike, repeats: number, axis?: number): Array {
+  if (!Number.isInteger(repeats) || repeats < 0) {
+    throw new TypeError(
+      `repeat: repeats must be a non-negative integer, got ${repeats}`,
+    );
+  }
+  a = fudgeArray(a);
+  if (axis === undefined) {
+    a = ravel(a);
+    axis = 0;
+  }
+  axis = checkAxis(axis, a.ndim);
+  const broadcastedShape = a.shape.toSpliced(axis + 1, 0, repeats);
+  const finalShape = a.shape.toSpliced(axis, 1, a.shape[axis] * repeats);
+  return core
+    .broadcast(a, broadcastedShape, [axis + 1])
+    .reshape(finalShape) as Array;
 }
 
 /**
