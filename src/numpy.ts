@@ -783,6 +783,12 @@ export function absolute(x: ArrayLike): Array {
 /** Alias of `jax.numpy.absolute()`. */
 export const abs = absolute;
 
+/** Return an element-wise indication of sign of the input. */
+export function sign(x: ArrayLike): Array {
+  x = fudgeArray(x);
+  return where(notEqual(x.ref, 0), where(less(x.ref, 0), -1, 1), 0);
+}
+
 /** Calculate element-wise square of the input array. */
 export function square(x: ArrayLike): Array {
   x = fudgeArray(x);

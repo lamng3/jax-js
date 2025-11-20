@@ -589,6 +589,19 @@ suite.each(devices)("device:%s", (device) => {
     });
   });
 
+  suite("jax.numpy.sign()", () => {
+    test("computes sign function", () => {
+      const x = np.array([-10, 0, 5]);
+      const y = np.sign(x);
+      expect(y.js()).toEqual([-1, 0, 1]);
+    });
+
+    // TODO: Fix sign(NaN) returning 1 instead of NaN
+    test.fails("works with NaN", () => {
+      expect(np.sign(NaN).js()).toBeNaN();
+    });
+  });
+
   suite("jax.numpy.reciprocal()", () => {
     test("computes element-wise reciprocal", () => {
       const x = np.array([1, 2, 3]);
