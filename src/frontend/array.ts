@@ -139,6 +139,7 @@ export class Array extends Tracer {
   #st: ShapeTracker;
   #backend: Backend;
   #rc: number; // reference count for this specific Array object
+
   #pendingSet: Set<PendingExecute> | null; // only if source is `Slot`
 
   /**
@@ -152,7 +153,11 @@ export class Array extends Tracer {
     st: ShapeTracker,
     dtype: DType,
     backend: Backend,
-    pending: Iterable<PendingExecute> | null = null,
+    {
+      pending = null,
+    }: {
+      pending?: Iterable<PendingExecute> | null;
+    } = {},
   ) {
     super(baseArrayTrace);
     this.id = Array.#nextId++;
@@ -161,7 +166,11 @@ export class Array extends Tracer {
     this.#st = st;
     this.#backend = backend;
     this.#rc = 1;
-    this.#pendingSet = new Set(pending);
+
+    if (source instanceof AluExp && pending !== null) {
+      throw new Error("internal: AluExp source cannot have pending executes");
+    }
+    this.#pendingSet = pending !== null ? new Set(pending) : null;
   }
 
   /** @ignore */
@@ -238,7 +247,9 @@ export class Array extends Tracer {
     const pending = this.#pending;
     for (const exe of pending) exe.updateRc(+1);
     if (typeof this.#source === "number") this.#backend.incRef(this.#source);
-    const ar = new Array(this.#source, st, this.#dtype, this.#backend, pending);
+    const ar = new Array(this.#source, st, this.#dtype, this.#backend, {
+      pending,
+    });
     this.dispose(); // After constructing Array, so we don't free this.#source early.
     return ar;
   }
@@ -325,7 +336,7 @@ export class Array extends Tracer {
       ShapeTracker.fromShape(finalShape),
       this.#dtype,
       this.#backend,
-      pending,
+      { pending },
     );
   }
 
@@ -383,7 +394,7 @@ export class Array extends Tracer {
       ShapeTracker.fromShape(this.shape),
       dtypeOutput,
       this.#backend,
-      pending,
+      { pending },
     );
   }
 
@@ -501,7 +512,7 @@ export class Array extends Tracer {
       ShapeTracker.fromShape(newShape),
       dtypeOutput,
       backend,
-      pending,
+      { pending },
     );
   }
 
@@ -537,7 +548,7 @@ export class Array extends Tracer {
       ShapeTracker.fromShape(newShape),
       this.#dtype,
       this.#backend,
-      pending,
+      { pending },
     );
   }
 
@@ -749,7 +760,7 @@ export class Array extends Tracer {
           x.#backend.incRef(x.#source);
           const pending = x.#pending;
           for (const exe of pending) exe.updateRc(+1);
-          const y = new Array(x.#source, x.#st, dtype, x.#backend, pending);
+          const y = new Array(x.#source, x.#st, dtype, x.#backend, { pending });
           x.dispose();
           return [y];
         }
@@ -894,7 +905,7 @@ export class Array extends Tracer {
             ShapeTracker.fromShape(jaxpr.outs[i].aval.shape),
             jaxpr.outs[i].aval.dtype,
             backend,
-            pending,
+            { pending },
           );
         });
       },
