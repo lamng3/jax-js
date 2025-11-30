@@ -203,5 +203,15 @@ suite.each(devices)("device:%s", (device) => {
         ],
       ]);
     });
+
+    test("works for uint32", () => {
+      const x = np.array([0, 2, 1], { dtype: np.uint32 });
+      const y = nn.oneHot(x, 3);
+      expect(y.js()).toEqual([
+        [1, 0, 0],
+        [0, 0, 1],
+        [0, 1, 0],
+      ]);
+    });
   });
 });

@@ -1,5 +1,6 @@
 // Common functions for neural network libraries, mirroring `jax.nn` in JAX.
 
+import { isFloatDtype } from "./alu";
 import { eye, fudgeArray, ones, zeros } from "./frontend/array";
 import { broadcast, shrink, stopGradient } from "./frontend/core";
 import { jit } from "./frontend/jaxpr";
@@ -8,7 +9,6 @@ import {
   Array,
   ArrayLike,
   clip,
-  DType,
   exp,
   less,
   log,
@@ -276,7 +276,7 @@ export function logsumexp(x: ArrayLike, axis?: number | number[]): Array {
  * ```
  */
 export function oneHot(x: Array, numClasses: number): Array {
-  if (x.dtype !== DType.Int32) {
+  if (isFloatDtype(x.dtype)) {
     throw new TypeError(`oneHot expects integers, got ${x.dtype}`);
   }
   return eye(numClasses, undefined, { device: x.device }).slice(x);
