@@ -75,6 +75,8 @@ In the tables below, we use a color legend to refer to functions in JAX:
 Array primitives need to be called with methods like `a.add(b)` / `a.mul(b)` instead of `a + b` and
 `a * b` as in Python, which has overloading.
 
+Broadcasting is fully supported. Basic and advanced indexing can be done with `Array.slice()`.
+
 Several other Array convenience methods are supported like `Array.min()` and `Array.sum()`, although
 some of them are only available in the `jax.numpy` namespace. This is for performance and to
 simplify the core Array prototype, since there's a bit of cruft there with esoteric methods like
