@@ -15,6 +15,7 @@ import {
   prod,
   range,
   rep,
+  unique,
 } from "../utils";
 import type { ConvParams } from "./convolution";
 import type { Jaxpr } from "./jaxpr";
@@ -189,7 +190,7 @@ export function reduce(
   } else if (typeof axis === "number") {
     axis = [checkAxis(axis, ndim(x))];
   } else {
-    axis = axis.map((a) => checkAxis(a, ndim(x)));
+    axis = unique(axis.map((a) => checkAxis(a, ndim(x))));
   }
   const originalShape = getShape(x);
   let result = bind1(Primitive.Reduce, [x], { op, axis });
@@ -261,7 +262,7 @@ export function transpose(x: TracerValue, perm?: number[]) {
 }
 
 export function broadcast(x: TracerValue, shape: number[], axis: number[]) {
-  axis = axis.map((a) => checkAxis(a, shape.length));
+  axis = unique(axis.map((a) => checkAxis(a, shape.length)));
   return bind1(Primitive.Broadcast, [x], { shape, axis });
 }
 
@@ -287,7 +288,7 @@ export function reshape(x: TracerValue, shape: number | number[]) {
 }
 
 export function flip(x: TracerValue, axis: number[]) {
-  axis = axis.map((a) => checkAxis(a, ndim(x)));
+  axis = unique(axis.map((a) => checkAxis(a, ndim(x))));
   return bind1(Primitive.Flip, [x], { axis });
 }
 
@@ -559,10 +560,14 @@ export abstract class Tracer {
     } else if (typeof axis === "number") {
       axis = [checkAxis(axis, this.ndim)];
     } else {
-      axis = axis.map((a) => checkAxis(a, this.ndim));
+      axis = unique(axis.map((a) => checkAxis(a, this.ndim)));
+    }
+    const n = axis.reduce((acc, a) => acc * this.shape[a], 1);
+    if (n === 0) {
+      throw new Error("mean: cannot compute mean over zero-length axis");
     }
     const result = reduce(this, AluOp.Add, axis, opts);
-    return result.mul(result.size / this.size) as this;
+    return result.mul(1 / n) as this;
   }
 
   /** Permute the dimensions of an array. Defaults to reversing the axis order. */

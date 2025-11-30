@@ -983,3 +983,52 @@ export function tanh(x: ArrayLike): Array {
   const en2x = exp(x.mul(negsgn.ref).mul(2));
   return en2x.ref.sub(1).div(en2x.add(1)).mul(negsgn);
 }
+
+/**
+ * Compute the variance of an array.
+ *
+ * The variance is computed for the flattened array by default, otherwise over
+ * the specified axis.
+ *
+ * If `correction` is provided, the divisor in calculation is `N - correction`,
+ * where `N` represents the number of elements (e.g., for Bessel's correction).
+ */
+export function var_(
+  x: ArrayLike,
+  axis?: number | number[],
+  opts?: { correction?: number } & core.ReduceOpts,
+): Array {
+  x = fudgeArray(x);
+  if (axis === undefined) {
+    axis = range(x.ndim);
+  } else if (typeof axis === "number") {
+    axis = [checkAxis(axis, x.ndim)];
+  } else {
+    axis = axis.map((a) => checkAxis(a, x.ndim));
+  }
+  const n = axis.reduce((acc, a) => acc * x.shape[a], 1);
+  if (n === 0) {
+    throw new Error("var: cannot compute variance over zero-length axis");
+  }
+  const mu = mean(x.ref, axis, { keepdims: true });
+  return square(x.sub(mu))
+    .sum(axis, { keepdims: opts?.keepdims })
+    .mul(1 / (n - (opts?.correction ?? 0)));
+}
+
+/**
+ * Compute the standard deviation of an array.
+ *
+ * The standard deviation is computed for the flattened array by default,
+ * otherwise over the specified axis.
+ *
+ * If `correction` is provided, the divisor in calculation is `N - correction`,
+ * where `N` represents the number of elements (e.g., for Bessel's correction).
+ */
+export function std(
+  x: ArrayLike,
+  axis?: number | number[],
+  opts?: { correction?: number } & core.ReduceOpts,
+): Array {
+  return sqrt(var_(x, axis, opts));
+}

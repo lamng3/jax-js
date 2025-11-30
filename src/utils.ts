@@ -129,6 +129,19 @@ export function checkAxis(axis: number, ndim: number): number {
   return axis < 0 ? axis + ndim : axis;
 }
 
+/** Return sorted unique items in the list of values. */
+export function unique(values: number[]): number[] {
+  const newValues: number[] = [];
+  let lastValue: number | null = null;
+  for (const x of values.toSorted()) {
+    if (x !== lastValue) {
+      newValues.push(x);
+      lastValue = x;
+    }
+  }
+  return newValues;
+}
+
 export function range(
   start: number,
   stop?: number,

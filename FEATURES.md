@@ -419,7 +419,7 @@ Most operations behave the same way as they do in JAX.
 | `square`              | 🟢      |                                         |
 | `squeeze`             | 🟠      |                                         |
 | `stack`               | 🟢      |                                         |
-| `std`                 | 🟠      |                                         |
+| `std`                 | 🟢      |                                         |
 | `subtract`            | 🟢      |                                         |
 | `sum`                 | 🟢      |                                         |
 | `swapaxes`            | 🟠      | `transpose` is supported                |
@@ -454,7 +454,7 @@ Most operations behave the same way as they do in JAX.
 | `unstack`             | 🟠      |                                         |
 | `unwrap`              | 🔴      |                                         |
 | `vander`              | 🟠      |                                         |
-| `var`                 | 🟠      |                                         |
+| `var`                 | 🟢      |                                         |
 | `vdot`                | 🟢      |                                         |
 | `vecdot`              | 🟢      |                                         |
 | `vecmat`              | 🟠      |                                         |

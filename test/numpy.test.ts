@@ -1070,4 +1070,18 @@ suite.each(devices)("device:%s", (device) => {
       ]);
     });
   });
+
+  suite("jax.numpy.var_()", () => {
+    test("computes variance", () => {
+      const x = np.array([1, 2, 3, 4]);
+      const y = np.var_(x);
+      expect(y).toBeAllclose(1.25);
+    });
+
+    test("computes standard deviation", () => {
+      const x = np.array([1, 2, 3, 4]);
+      const y = np.std(x);
+      expect(y).toBeAllclose(Math.sqrt(1.25));
+    });
+  });
 });
