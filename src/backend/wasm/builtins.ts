@@ -211,87 +211,99 @@ export function wasm_log(cg: CodeGenerator): number {
 }
 
 /**
- * Approximate sin(x).
+ * Common helper to approximate sin(x) and cos(x).
  *
  * Method: reduce to y in [-π, π], then quadrant via q = round(y/(π/2))
- *         z = y - q*(π/2); use odd polynomial on z:
+ *         z = y - q*(π/2); use one of two polynomials on z:
  *         sin(z) ≈ z + z^3*(-1/6) + z^5*(1/120) + z^7*(-1/5040)
+ *         cos(z) ≈ 1 + z^2*(-1/2) + z^4*(1/24) + z^6*(-1/720)
+ */
+function sincos(cg: CodeGenerator): { q: number; sz: number; cz: number } {
+  const y = cg.local.declare(cg.f32);
+  const qf = cg.local.declare(cg.f32);
+  const q = cg.local.declare(cg.i32);
+  const z = cg.local.declare(cg.f32);
+  const z2 = cg.local.declare(cg.f32);
+  const sz = cg.local.declare(cg.f32);
+  const cz = cg.local.declare(cg.f32);
+
+  // y = x - round(x / (2π)) * (2π)
+  cg.local.get(0);
+  cg.local.get(0);
+  cg.f32.const(1 / (2 * Math.PI));
+  cg.f32.mul();
+  cg.f32.nearest();
+  cg.local.tee(qf);
+  cg.f32.const(2 * Math.PI);
+  cg.f32.mul();
+  cg.f32.sub();
+  cg.local.set(y);
+
+  // q = round(y / (π/2)); z = y - q*(π/2)
+  cg.local.get(y);
+  cg.f32.const(2 / Math.PI);
+  cg.f32.mul();
+  cg.f32.nearest();
+  cg.local.tee(qf);
+  cg.i32.trunc_f32_s();
+  cg.local.set(q);
+
+  cg.local.get(y);
+  cg.local.get(qf);
+  cg.f32.const(Math.PI / 2);
+  cg.f32.mul();
+  cg.f32.sub();
+  cg.local.tee(z);
+  cg.local.get(z);
+  cg.f32.mul();
+  cg.local.set(z2);
+
+  // sin poly: z * (1 + z^2 * (-1/6 + z^2 * (1/120 + z^2 * (-1/5040))))
+  cg.f32.const(-1 / 5040);
+  cg.local.get(z2);
+  cg.f32.mul();
+  cg.f32.const(1 / 120);
+  cg.f32.add();
+  cg.local.get(z2);
+  cg.f32.mul();
+  cg.f32.const(-1 / 6);
+  cg.f32.add();
+  cg.local.get(z2);
+  cg.f32.mul();
+  cg.f32.const(1.0);
+  cg.f32.add();
+  cg.local.get(z);
+  cg.f32.mul();
+  cg.local.set(sz);
+
+  // cos poly: 1 + z^2 * (-1/2 + z^2 * (1/24 + z^2 * (-1/720)))
+  cg.f32.const(-1 / 720);
+  cg.local.get(z2);
+  cg.f32.mul();
+  cg.f32.const(1 / 24);
+  cg.f32.add();
+  cg.local.get(z2);
+  cg.f32.mul();
+  cg.f32.const(-1 / 2);
+  cg.f32.add();
+  cg.local.get(z2);
+  cg.f32.mul();
+  cg.f32.const(1.0);
+  cg.f32.add();
+  cg.local.set(cz);
+
+  return { q, sz, cz };
+}
+
+/**
+ * Approximate sin(x).
+ *
+ * Quadrant mapping: k=q mod 4: 0: +sz, 1: +cz, 2: -sz, 3: -cz
  */
 export function wasm_sin(cg: CodeGenerator): number {
   return cg.function([cg.f32], [cg.f32], () => {
-    const y = cg.local.declare(cg.f32);
-    const qf = cg.local.declare(cg.f32);
-    const q = cg.local.declare(cg.i32);
-    const z = cg.local.declare(cg.f32);
-    const z2 = cg.local.declare(cg.f32);
-    const sz = cg.local.declare(cg.f32);
-    const cz = cg.local.declare(cg.f32);
+    const { q, sz, cz } = sincos(cg);
     const mag = cg.local.declare(cg.f32);
-
-    // y = x - round(x / (2π)) * (2π)
-    cg.local.get(0);
-    cg.local.get(0);
-    cg.f32.const(1 / (2 * Math.PI));
-    cg.f32.mul();
-    cg.f32.nearest();
-    cg.local.tee(qf);
-    cg.f32.const(2 * Math.PI);
-    cg.f32.mul();
-    cg.f32.sub();
-    cg.local.set(y);
-
-    // q = round(y / (π/2)); z = y - q*(π/2)
-    cg.local.get(y);
-    cg.f32.const(2 / Math.PI);
-    cg.f32.mul();
-    cg.f32.nearest();
-    cg.local.tee(qf);
-    cg.i32.trunc_f32_s();
-    cg.local.set(q);
-
-    cg.local.get(y);
-    cg.local.get(qf);
-    cg.f32.const(Math.PI / 2);
-    cg.f32.mul();
-    cg.f32.sub();
-    cg.local.tee(z);
-    cg.local.get(z);
-    cg.f32.mul();
-    cg.local.set(z2);
-
-    // sin poly: z * (1 + z^2 * (-1/6 + z^2 * (1/120 + z^2 * (-1/5040))))
-    cg.f32.const(-1 / 5040);
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(1 / 120);
-    cg.f32.add();
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(-1 / 6);
-    cg.f32.add();
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(1.0);
-    cg.f32.add();
-    cg.local.get(z);
-    cg.f32.mul();
-    cg.local.set(sz);
-
-    // cos poly: 1 + z^2 * (-1/2 + z^2 * (1/24 + z^2 * (-1/720)))
-    cg.f32.const(-1 / 720);
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(1 / 24);
-    cg.f32.add();
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(-1 / 2);
-    cg.f32.add();
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(1.0);
-    cg.f32.add();
-    cg.local.set(cz);
 
     // select magnitude and apply sign: ((q & 2) ? -1 : 1) * ((q & 1) ? cz : sz)
     cg.local.get(cz);
@@ -313,84 +325,12 @@ export function wasm_sin(cg: CodeGenerator): number {
 /**
  * Approximate cos(x).
  *
- * Same reduction as sinf, then quadrant mapping:
- * k=q mod 4: 0: +cz, 1: -sz, 2: -cz, 3: +sz
+ * Quadrant mapping: k=q mod 4: 0: +cz, 1: -sz, 2: -cz, 3: +sz
  */
 export function wasm_cos(cg: CodeGenerator): number {
   return cg.function([cg.f32], [cg.f32], () => {
-    const y = cg.local.declare(cg.f32);
-    const qf = cg.local.declare(cg.f32);
-    const q = cg.local.declare(cg.i32);
-    const z = cg.local.declare(cg.f32);
-    const z2 = cg.local.declare(cg.f32);
-    const sz = cg.local.declare(cg.f32);
-    const cz = cg.local.declare(cg.f32);
+    const { q, sz, cz } = sincos(cg);
     const mag = cg.local.declare(cg.f32);
-
-    // y = x - round(x / (2π)) * (2π)
-    cg.local.get(0);
-    cg.local.get(0);
-    cg.f32.const(1 / (2 * Math.PI));
-    cg.f32.mul();
-    cg.f32.nearest();
-    cg.local.tee(qf);
-    cg.f32.const(2 * Math.PI);
-    cg.f32.mul();
-    cg.f32.sub();
-    cg.local.set(y);
-
-    // q = round(y / (π/2)); z = y - q*(π/2)
-    cg.local.get(y);
-    cg.f32.const(2 / Math.PI);
-    cg.f32.mul();
-    cg.f32.nearest();
-    cg.local.tee(qf);
-    cg.i32.trunc_f32_s();
-    cg.local.set(q);
-
-    cg.local.get(y);
-    cg.local.get(qf);
-    cg.f32.const(Math.PI / 2);
-    cg.f32.mul();
-    cg.f32.sub();
-    cg.local.tee(z);
-    cg.local.get(z);
-    cg.f32.mul();
-    cg.local.set(z2);
-
-    // sin poly: z * (1 + z^2 * (-1/6 + z^2 * (1/120 + z^2 * (-1/5040))))
-    cg.f32.const(-1 / 5040);
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(1 / 120);
-    cg.f32.add();
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(-1 / 6);
-    cg.f32.add();
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(1.0);
-    cg.f32.add();
-    cg.local.get(z);
-    cg.f32.mul();
-    cg.local.set(sz);
-
-    // cos poly: 1 + z^2 * (-1/2 + z^2 * (1/24 + z^2 * (-1/720)))
-    cg.f32.const(-1 / 720);
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(1 / 24);
-    cg.f32.add();
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(-1 / 2);
-    cg.f32.add();
-    cg.local.get(z2);
-    cg.f32.mul();
-    cg.f32.const(1.0);
-    cg.f32.add();
-    cg.local.set(cz);
 
     // select magnitude and apply sign: ((q+1) & 2) ? -1 : 1) * ((q & 1) ? sz : cz)
     cg.local.get(sz);
