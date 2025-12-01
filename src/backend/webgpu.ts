@@ -395,19 +395,25 @@ function pipelineSource(device: GPUDevice, kernel: Kernel): ShaderInfo {
       else if (op === AluOp.Cmplt) source = `(${a} < ${b})`;
       else if (op === AluOp.Cmpne) source = `(${a} != ${b})`;
     } else if (AluGroup.Unary.has(op)) {
-      const a = gen(src[0]);
-      if (op === AluOp.Sin) source = `sin(${a})`;
-      else if (op === AluOp.Cos) source = `cos(${a})`;
-      else if (op === AluOp.Asin) source = `asin(${a})`;
-      else if (op === AluOp.Atan) source = `atan(${a})`;
-      else if (op === AluOp.Exp) source = `exp(${a})`;
-      else if (op === AluOp.Log) source = `log(${a})`;
-      else if (op === AluOp.Sqrt) source = `sqrt(${a})`;
-      else if (op === AluOp.Reciprocal) source = `(1.0 / ${a})`;
-      else if (op === AluOp.Cast)
-        source = `${dtypeToWgsl(dtype)}(${strip1(a)})`;
-      else if (op === AluOp.Bitcast)
-        source = `bitcast<${dtypeToWgsl(dtype)}>(${strip1(a)})`;
+      if (op === AluOp.Reciprocal && src[0].op === AluOp.Sqrt) {
+        // Special case: 1/sqrt(x) is optimized as rsqrt(x)
+        const a = gen(src[0].src[0]);
+        source = `inverseSqrt(${a})`;
+      } else {
+        const a = gen(src[0]);
+        if (op === AluOp.Sin) source = `sin(${a})`;
+        else if (op === AluOp.Cos) source = `cos(${a})`;
+        else if (op === AluOp.Asin) source = `asin(${a})`;
+        else if (op === AluOp.Atan) source = `atan(${a})`;
+        else if (op === AluOp.Exp) source = `exp(${a})`;
+        else if (op === AluOp.Log) source = `log(${a})`;
+        else if (op === AluOp.Sqrt) source = `sqrt(${a})`;
+        else if (op === AluOp.Reciprocal) source = `(1.0 / ${a})`;
+        else if (op === AluOp.Cast)
+          source = `${dtypeToWgsl(dtype)}(${strip1(a)})`;
+        else if (op === AluOp.Bitcast)
+          source = `bitcast<${dtypeToWgsl(dtype)}>(${strip1(a)})`;
+      }
     } else if (op === AluOp.Where) {
       // select(f, t, cond) -> cond ? t : f
       source = `select(${strip1(gen(src[2]))}, ${strip1(gen(src[1]))}, ${strip1(gen(src[0]))})`;
