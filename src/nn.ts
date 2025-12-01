@@ -1,8 +1,8 @@
 // Common functions for neural network libraries, mirroring `jax.nn` in JAX.
 
 import { isFloatDtype } from "./alu";
-import { eye, fudgeArray, ones, zeros } from "./frontend/array";
-import { broadcast, shrink, stopGradient } from "./frontend/core";
+import { eye, fudgeArray } from "./frontend/array";
+import { type Axis, broadcast, shrink, stopGradient } from "./frontend/core";
 import { jit } from "./frontend/jaxpr";
 import {
   absolute,
@@ -15,11 +15,13 @@ import {
   max,
   maximum,
   negative,
+  onesLike,
   reciprocal,
   sqrt,
   square,
   tanh,
   where,
+  zerosLike,
 } from "./numpy";
 import { Pair } from "./shape";
 import { checkAxis, normalizeAxis } from "./utils";
@@ -212,17 +214,11 @@ export function mish(x: ArrayLike): Array {
  *
  * Reference: https://en.wikipedia.org/wiki/Softmax_function
  */
-export function softmax(x: ArrayLike, axis?: number | number[]): Array {
+export function softmax(x: ArrayLike, axis: Axis = -1): Array {
   x = fudgeArray(x);
-  if (axis === undefined) {
-    axis = x.ndim ? [x.ndim - 1] : []; // default to last axis
-  } else if (typeof axis === "number") {
-    axis = [axis];
-  }
-
+  axis = normalizeAxis(axis, x.ndim);
   if (axis.length === 0) {
-    x.dispose();
-    return ones(x.shape); // scalar case, return ones
+    return onesLike(x); // scalar case, return ones
   }
 
   const xMax = max(x.ref, axis, { keepdims: true });
@@ -238,17 +234,11 @@ export function softmax(x: ArrayLike, axis?: number | number[]): Array {
  *
  * If `axis` is not specified, it defaults to the last axis.
  */
-export function logSoftmax(x: ArrayLike, axis?: number | number[]): Array {
+export function logSoftmax(x: ArrayLike, axis: Axis = -1): Array {
   x = fudgeArray(x);
-  if (axis === undefined) {
-    axis = x.ndim ? [x.ndim - 1] : []; // default to last axis
-  } else if (typeof axis === "number") {
-    axis = [axis];
-  }
-
+  axis = normalizeAxis(axis, x.ndim);
   if (axis.length === 0) {
-    x.dispose();
-    return zeros(x.shape); // scalar case, return log(1)
+    return zerosLike(x); // scalar case, return log(1)
   }
 
   const xMax = max(x.ref, axis, { keepdims: true }); // keep dims
@@ -265,7 +255,7 @@ export function logSoftmax(x: ArrayLike, axis?: number | number[]): Array {
  *
  * Reference: https://en.wikipedia.org/wiki/LogSumExp
  */
-export function logsumexp(x: ArrayLike, axis?: number | number[]): Array {
+export function logsumexp(x: ArrayLike, axis: Axis = null): Array {
   x = fudgeArray(x);
   axis = normalizeAxis(axis, x.ndim);
   if (axis.length === 0) return x;
@@ -277,7 +267,7 @@ export function logsumexp(x: ArrayLike, axis?: number | number[]): Array {
 }
 
 /** Log-mean-exp reduction, like `jax.nn.logsumexp()` but subtracts `log(n)`. */
-export function logmeanexp(x: ArrayLike, axis?: number | number[]): Array {
+export function logmeanexp(x: ArrayLike, axis: Axis = null): Array {
   x = fudgeArray(x);
   axis = normalizeAxis(axis, x.ndim);
   if (axis.length === 0) return x;

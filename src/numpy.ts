@@ -21,7 +21,14 @@ import {
 import * as core from "./frontend/core";
 import { jit } from "./frontend/jaxpr";
 import * as vmapModule from "./frontend/vmap";
-import { checkAxis, deepEqual, prod as iprod, range, rep } from "./utils";
+import {
+  checkAxis,
+  deepEqual,
+  prod as iprod,
+  normalizeAxis,
+  range,
+  rep,
+} from "./utils";
 
 export {
   arange,
@@ -209,7 +216,7 @@ export function astype(a: ArrayLike, dtype: DType): Array {
 /** Sum of the elements of the array over a given axis, or axes. */
 export function sum(
   a: ArrayLike,
-  axis?: number | number[],
+  axis: core.Axis = null,
   opts?: core.ReduceOpts,
 ): Array {
   return core.reduce(a, AluOp.Add, axis, opts) as Array;
@@ -218,7 +225,7 @@ export function sum(
 /** Product of the array elements over a given axis. */
 export function prod(
   a: ArrayLike,
-  axis?: number | number[],
+  axis: core.Axis = null,
   opts?: core.ReduceOpts,
 ): Array {
   return core.reduce(a, AluOp.Mul, axis, opts) as Array;
@@ -227,7 +234,7 @@ export function prod(
 /** Return the minimum of array elements along a given axis. */
 export function min(
   a: ArrayLike,
-  axis?: number | number[],
+  axis: core.Axis = null,
   opts?: core.ReduceOpts,
 ): Array {
   return core.reduce(a, AluOp.Min, axis, opts) as Array;
@@ -236,7 +243,7 @@ export function min(
 /** Return the maximum of array elements along a given axis. */
 export function max(
   a: ArrayLike,
-  axis?: number | number[],
+  axis: core.Axis = null,
   opts?: core.ReduceOpts,
 ): Array {
   return core.reduce(a, AluOp.Max, axis, opts) as Array;
@@ -245,7 +252,7 @@ export function max(
 /** Compute the average of the array elements along the specified axis. */
 export function mean(
   a: ArrayLike,
-  axis?: number | number[],
+  axis: core.Axis = null,
   opts?: core.ReduceOpts,
 ): Array {
   return fudgeArray(a).mean(axis, opts);
@@ -314,26 +321,9 @@ export function argmax(
 }
 
 /** Reverse the elements in an array along the given axes. */
-export function flip(x: ArrayLike, axis?: number | number[]): Array {
+export function flip(x: ArrayLike, axis: core.Axis = null): Array {
   const nd = ndim(x);
-  if (axis === undefined) {
-    axis = range(nd);
-  } else if (typeof axis === "number") {
-    axis = [axis];
-  }
-  const seen = new Set<number>();
-  for (let i = 0; i < axis.length; i++) {
-    if (axis[i] >= nd || axis[i] < -nd) {
-      throw new Error(
-        `flip: axis ${axis[i]} out of bounds for array of ${nd} dimensions`,
-      );
-    }
-    if (axis[i] < 0) axis[i] += nd; // convert negative to positive
-    if (seen.has(axis[i])) {
-      throw new Error(`flip: duplicate axis ${axis[i]} in axis list`);
-    }
-    seen.add(axis[i]);
-  }
+  axis = normalizeAxis(axis, nd);
   return core.flip(x, axis) as Array;
 }
 
@@ -1104,17 +1094,11 @@ export function tanh(x: ArrayLike): Array {
  */
 export function var_(
   x: ArrayLike,
-  axis?: number | number[],
+  axis: core.Axis = null,
   opts?: { correction?: number } & core.ReduceOpts,
 ): Array {
   x = fudgeArray(x);
-  if (axis === undefined) {
-    axis = range(x.ndim);
-  } else if (typeof axis === "number") {
-    axis = [checkAxis(axis, x.ndim)];
-  } else {
-    axis = axis.map((a) => checkAxis(a, x.ndim));
-  }
+  axis = normalizeAxis(axis, x.ndim);
   const n = axis.reduce((acc, a) => acc * x.shape[a], 1);
   if (n === 0) {
     throw new Error("var: cannot compute variance over zero-length axis");
@@ -1136,7 +1120,7 @@ export function var_(
  */
 export function std(
   x: ArrayLike,
-  axis?: number | number[],
+  axis: core.Axis = null,
   opts?: { correction?: number } & core.ReduceOpts,
 ): Array {
   return sqrt(var_(x, axis, opts));

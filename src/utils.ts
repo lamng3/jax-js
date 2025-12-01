@@ -124,36 +124,32 @@ export function isNumberPair(x: unknown): x is [number, number] {
 /** Check an axis against number of dimensions, and resolve negative axes. */
 export function checkAxis(axis: number, ndim: number): number {
   if (axis < -ndim || axis >= ndim) {
-    throw new Error(`Invalid axis ${axis} for array of ${ndim} dimensions`);
+    throw new Error(
+      `Axis ${axis} out of bounds for array of dimension ${ndim}`,
+    );
   }
   return axis < 0 ? axis + ndim : axis;
 }
 
 /** Normalize common axis argument for functions, defaulting to all axes. */
 export function normalizeAxis(
-  axis: number | number[] | undefined,
+  axis: number | number[] | null,
   ndim: number,
 ): number[] {
-  if (axis === undefined) {
+  if (axis === null) {
     return range(ndim); // default to all axes
   } else if (typeof axis === "number") {
     return [checkAxis(axis, ndim)];
   } else {
-    return unique(axis.map((a) => checkAxis(a, ndim)));
-  }
-}
-
-/** Return sorted unique items in the list of values. */
-export function unique(values: number[]): number[] {
-  const newValues: number[] = [];
-  let lastValue: number | null = null;
-  for (const x of values.toSorted()) {
-    if (x !== lastValue) {
-      newValues.push(x);
-      lastValue = x;
+    const seen = new Set<number>();
+    for (const a of axis) {
+      const ca = checkAxis(a, ndim);
+      if (seen.has(ca))
+        throw new Error(`Duplicate axis ${ca} passed to function`);
+      seen.add(ca);
     }
+    return [...seen].sort();
   }
-  return newValues;
 }
 
 export function range(

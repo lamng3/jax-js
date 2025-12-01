@@ -122,7 +122,7 @@ suite.each(devices)("device:%s", (device) => {
     });
 
     test("should work with no axes", () => {
-      expect(nn.softmax(np.zeros([])).js()).toEqual(1);
+      expect(nn.softmax(np.zeros([]), null).js()).toEqual(1);
       expect(nn.softmax(np.array([1, 2, 3]), []).js()).toEqual([1, 1, 1]);
       expect(nn.softmax(np.zeros([0])).js()).toEqual([]);
     });

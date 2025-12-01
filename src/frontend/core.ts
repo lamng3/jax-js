@@ -183,12 +183,15 @@ export function max(x: TracerValue, y: TracerValue) {
 }
 
 /** @inline */
+export type Axis = number | number[] | null;
+
+/** @inline */
 export type ReduceOpts = { keepdims?: boolean };
 
 export function reduce(
   x: TracerValue,
   op: AluOp,
-  axis?: number | number[],
+  axis: Axis = null,
   opts?: ReduceOpts,
 ) {
   if (!AluGroup.Reduce.has(op)) {
@@ -547,17 +550,17 @@ export abstract class Tracer {
   }
 
   /** Sum of the elements of the array over a given axis, or axes. */
-  sum(axis?: number | number[], opts?: ReduceOpts) {
+  sum(axis: Axis = null, opts?: ReduceOpts) {
     return reduce(this, AluOp.Add, axis, opts) as this;
   }
 
   /** Product of the array elements over a given axis. */
-  prod(axis?: number | number[], opts?: ReduceOpts) {
+  prod(axis: Axis = null, opts?: ReduceOpts) {
     return reduce(this, AluOp.Mul, axis, opts) as this;
   }
 
   /** Compute the average of the array elements along the specified axis. */
-  mean(axis?: number | number[], opts?: ReduceOpts) {
+  mean(axis: Axis = null, opts?: ReduceOpts) {
     axis = normalizeAxis(axis, this.ndim);
     const n = axis.reduce((acc, a) => acc * this.shape[a], 1);
     if (n === 0) {
