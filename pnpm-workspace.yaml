@@ -2,11 +2,12 @@ packages:
   - packages/*
   - website
 
+ignoreWorkspaceRootCheck: true
+
 onlyBuiltDependencies:
-  - "@jax-js/jax"
-  - "@tailwindcss/oxide"
+  - '@jax-js/jax'
+  - '@tailwindcss/oxide'
   - core-js
   - esbuild
   - msw
-
-ignoreWorkspaceRootCheck: true
+  - protobufjs
