@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolve } from "$app/paths";
+
   import type { Device } from "@jax-js/jax";
   import { SplitPane } from "@rich_harris/svelte-split-pane";
   import {
@@ -25,7 +27,9 @@
   let editor: ReplEditor;
   let runner = new ReplRunner();
   let currentText = $state(initialText);
-  let replLink = $derived(`/repl?content=` + encodeContent(currentText));
+  let replLink = $derived(
+    resolve("/repl") + `?content=${encodeContent(currentText)}`,
+  );
   let device = $state<Device>("webgpu");
 
   let expanded = $state(false);
