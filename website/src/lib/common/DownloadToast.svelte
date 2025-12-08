@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CheckCircle, Loader2, XCircle } from "lucide-svelte";
+  import { CircleCheck, CircleX, LoaderCircle } from "@lucide/svelte";
   import { fly } from "svelte/transition";
 
   import { formatBytes } from "$lib/chart/format";
@@ -21,11 +21,14 @@
   <div class="flex items-start gap-3">
     <div class="flex-shrink-0 mt-0.5">
       {#if status === "downloading"}
-        <Loader2 size={16} class="stroke-[2.5] animate-spin text-blue-600" />
+        <LoaderCircle
+          size={16}
+          class="stroke-[2.5] animate-spin text-blue-600"
+        />
       {:else if status === "success"}
-        <CheckCircle size={16} class="stroke-[2.5] text-green-600" />
+        <CircleCheck size={16} class="stroke-[2.5] text-green-600" />
       {:else}
-        <XCircle size={16} class="stroke-[2.5] text-red-600" />
+        <CircleX size={16} class="stroke-[2.5] text-red-600" />
       {/if}
     </div>
     <div class="flex-1">

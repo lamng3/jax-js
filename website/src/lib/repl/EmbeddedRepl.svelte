@@ -2,7 +2,6 @@
   import { resolve } from "$app/paths";
 
   import type { Device } from "@jax-js/jax";
-  import { SplitPane } from "@rich_harris/svelte-split-pane";
   import {
     CheckIcon,
     ExternalLinkIcon,
@@ -11,7 +10,8 @@
     PlayIcon,
     TerminalIcon,
     UnfoldVerticalIcon,
-  } from "lucide-svelte";
+  } from "@lucide/svelte";
+  import { SplitPane } from "@rich_harris/svelte-split-pane";
 
   import ConsoleLine from "./ConsoleLine.svelte";
   import ReplEditor from "./ReplEditor.svelte";

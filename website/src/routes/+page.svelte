@@ -2,7 +2,7 @@
   import { browser } from "$app/environment";
   import { resolve } from "$app/paths";
 
-  import { ArrowUpRight } from "lucide-svelte";
+  import { ArrowUpRight } from "@lucide/svelte";
 
   import logo from "$lib/assets/logo.svg";
   import MatmulPerfDemo from "$lib/homepage/MatmulPerfDemo.svelte";

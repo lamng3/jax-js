@@ -1,11 +1,11 @@
 <script lang="ts">
   import {
-    AlertTriangleIcon,
     ChevronRightIcon,
     ImageIcon,
     InfoIcon,
+    TriangleAlertIcon,
     XIcon,
-  } from "lucide-svelte";
+  } from "@lucide/svelte";
 
   import type { ConsoleLine } from "./runner.svelte";
 
@@ -28,7 +28,7 @@
   {:else if line.level === "info"}
     <InfoIcon size={18} class="shrink-0 text-blue-500" />
   {:else if line.level === "warn"}
-    <AlertTriangleIcon size={18} class="shrink-0 text-yellow-500" />
+    <TriangleAlertIcon size={18} class="shrink-0 text-yellow-500" />
   {:else if line.level === "error"}
     <XIcon size={18} class="shrink-0 text-red-500" />
   {:else if line.level === "image"}

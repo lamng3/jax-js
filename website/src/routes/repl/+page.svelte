@@ -5,14 +5,14 @@
   import { page } from "$app/state";
 
   import type { Device } from "@jax-js/jax";
-  import { SplitPane } from "@rich_harris/svelte-split-pane";
   import {
     ArrowRightIcon,
     LoaderIcon,
     PaletteIcon,
     PlayIcon,
     ShareIcon,
-  } from "lucide-svelte";
+  } from "@lucide/svelte";
+  import { SplitPane } from "@rich_harris/svelte-split-pane";
 
   import ConsoleLine from "$lib/repl/ConsoleLine.svelte";
   import ReplEditor from "$lib/repl/ReplEditor.svelte";

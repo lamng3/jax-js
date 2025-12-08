@@ -8,7 +8,7 @@
     tree,
   } from "@jax-js/jax";
   import { cachedFetch, opfs, safetensors, tokenizers } from "@jax-js/loaders";
-  import { FileTextIcon, ImageIcon } from "lucide-svelte";
+  import { FileTextIcon, ImageIcon } from "@lucide/svelte";
 
   import DownloadToast, {
     type Props as DownloadToastProps,
