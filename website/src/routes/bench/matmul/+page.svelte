@@ -1,6 +1,8 @@
 <script lang="ts">
   import { browser } from "$app/environment";
 
+  import { importTfjs } from "$lib/benchmark";
+
   const n = 4096;
 
   let result: Record<string, number> = $state({});
@@ -679,12 +681,17 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
   }
 
   class TfjsStrategy extends Strategy {
-    name = "tfjs";
+    name: string;
+    wasm: boolean;
+
+    constructor(wasm = false) {
+      super();
+      this.name = wasm ? "tfjs-wasm" : "tfjs";
+      this.wasm = wasm;
+    }
 
     async run(): Promise<number> {
-      const tf = await import("@tensorflow/tfjs");
-      await import("@tensorflow/tfjs-backend-webgpu");
-      await tf.setBackend("webgpu");
+      const tf = await importTfjs(this.wasm ? "wasm" : "webgpu");
 
       const a = tf.tensor(randomBuffer, [n, n]);
       const b = tf.tensor(randomBuffer, [n, n]);
@@ -902,6 +909,7 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
     new OnnxStrategy(),
     new OnnxStrategy(true),
     new TfjsStrategy(),
+    new TfjsStrategy(true),
     new JaxJsStrategy(),
     new JaxJsStrategy(true),
   ];

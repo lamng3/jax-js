@@ -45,6 +45,7 @@
     "@rich_harris/svelte-split-pane": "^2.0.0",
     "@rollup/browser": "^4.34.8",
     "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "^4.22.0",
     "@tensorflow/tfjs-backend-webgpu": "^4.22.0",
     "d3-array": "^3.2.4",
     "d3-scale-chromatic": "^3.1.0",

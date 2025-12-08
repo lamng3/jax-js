@@ -1,7 +1,9 @@
 <script lang="ts">
   import { browser } from "$app/environment";
 
-  import type { Tensor4D } from "@tensorflow/tfjs";
+  import type tf from "@tensorflow/tfjs";
+
+  import { importTfjs } from "$lib/benchmark";
 
   const batchSize = 1;
   const channels = 64;
@@ -220,12 +222,17 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
   }
 
   class TfjsStrategy extends Strategy {
-    name = "tfjs";
+    name: string;
+    wasm: boolean;
+
+    constructor(wasm = false) {
+      super();
+      this.name = wasm ? "tfjs-wasm" : "tfjs";
+      this.wasm = wasm;
+    }
 
     async run(): Promise<number> {
-      const tf = await import("@tensorflow/tfjs");
-      await import("@tensorflow/tfjs-backend-webgpu");
-      await tf.setBackend("webgpu");
+      const tf = await importTfjs(this.wasm ? "wasm" : "webgpu");
 
       // Use shared random data with NCHW format for input.
       //
@@ -238,7 +245,7 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
       // output in lieu of debugging tfjs to find a fix.
       const input = tf
         .tensor4d(randomInput, [batchSize, channels, height, width])
-        .transpose<Tensor4D>([0, 2, 3, 1]); // NHWC format
+        .transpose<tf.Tensor4D>([0, 2, 3, 1]); // NHWC format
 
       // Convert filter from OIHW to HWIO format using transpose
       const filterOIHW = tf.tensor4d(randomFilter, [
@@ -254,7 +261,7 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
       const start = performance.now();
       const output = tf
         .conv2d(input, filter, 1, "same", "NHWC")
-        .transpose<Tensor4D>([0, 3, 1, 2]); // NHWC -> NCHW
+        .transpose<tf.Tensor4D>([0, 3, 1, 2]); // NHWC -> NCHW
       const ar = (await output.data()) as Float32Array;
       printBufferItems(ar);
       const time = performance.now() - start;
@@ -507,6 +514,7 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
     new OnnxStrategy(),
     new OnnxStrategy(true),
     new TfjsStrategy(),
+    new TfjsStrategy(true),
     new JaxJsStrategy(),
     new JaxJsStrategy(true),
   ];
