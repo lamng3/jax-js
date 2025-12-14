@@ -104,7 +104,7 @@ export function runMobileCLIPTextBlock(
   // Pre-norm MLP block
   const normed2 = runLayerNorm(ln2, x.ref);
   let mlpOut = runLinear(mlpUp, normed2);
-  mlpOut = nn.gelu(mlpOut);
+  mlpOut = nn.gelu(mlpOut, { approximate: false });
   mlpOut = runLinear(mlpDown, mlpOut);
   x = x.add(mlpOut); // Residual connection
 
