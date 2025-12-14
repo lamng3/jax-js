@@ -9,6 +9,7 @@ import * as nn from "./nn";
 import * as numpy from "./numpy";
 import { Array, ArrayLike, DType } from "./numpy";
 import * as random from "./random";
+import * as scipySpecial from "./scipy-special";
 import * as tree from "./tree";
 import type { JsTree, JsTreeDef, MapJsTree } from "./tree";
 import { setDebug } from "./utils";
@@ -31,6 +32,7 @@ export {
   type OwnedFunction,
   random,
   setDebug,
+  scipySpecial,
   tree,
 };
 
