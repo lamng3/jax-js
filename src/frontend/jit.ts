@@ -522,6 +522,8 @@ const jitRules: { [P in Primitive]: JitRule<P> } = {
   [Primitive.Atan]: unopJit(AluExp.atan),
   [Primitive.Exp]: unopJit(AluExp.exp),
   [Primitive.Log]: unopJit(AluExp.log),
+  [Primitive.Erf]: unopJit(AluExp.erf),
+  [Primitive.Erfc]: unopJit(AluExp.erfc),
   [Primitive.Sqrt]: unopJit(AluExp.sqrt),
   [Primitive.Min]: broadcastedJit(([a, b]) => AluExp.min(a, b)),
   [Primitive.Max]: broadcastedJit(([a, b]) => AluExp.max(a, b)),

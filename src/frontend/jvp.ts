@@ -16,6 +16,8 @@ import {
   broadcast,
   cast,
   cos,
+  erf,
+  erfc,
   exp,
   flattenFun,
   fullRaise,
@@ -182,6 +184,18 @@ const jvpRules: { [P in Primitive]: JvpRule<P> } = {
   [Primitive.Log]([x], [dx]) {
     // d(log(x)) = 1/x * dx
     return [[log(x.ref)], [reciprocal(x).mul(dx)]];
+  },
+  [Primitive.Erf]([x], [dx]) {
+    // d(erf(x)) = 2/sqrt(pi) * exp(-x^2) * dx
+    const coeff = 2 / Math.sqrt(Math.PI);
+    const expTerm = exp(neg(x.ref.mul(x.ref)));
+    return [[erf(x)], [expTerm.mul(coeff).mul(dx)]];
+  },
+  [Primitive.Erfc]([x], [dx]) {
+    // d(erfc(x)) = -2/sqrt(pi) * exp(-x^2) * dx
+    const coeff = -2 / Math.sqrt(Math.PI);
+    const expTerm = exp(neg(x.ref.mul(x.ref)));
+    return [[erfc(x)], [expTerm.mul(coeff).mul(dx)]];
   },
   [Primitive.Sqrt]([x], [dx]) {
     // d(sqrt(x)) = 1/(2*sqrt(x)) * dx

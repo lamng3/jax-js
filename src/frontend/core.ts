@@ -48,6 +48,8 @@ export enum Primitive {
   Atan = "atan",
   Exp = "exp",
   Log = "log",
+  Erf = "erf",
+  Erfc = "erfc",
   Sqrt = "sqrt",
   Min = "min",
   Max = "max",
@@ -169,6 +171,14 @@ export function exp(x: TracerValue) {
 
 export function log(x: TracerValue) {
   return bind1(Primitive.Log, [x]);
+}
+
+export function erf(x: TracerValue) {
+  return bind1(Primitive.Erf, [x]);
+}
+
+export function erfc(x: TracerValue) {
+  return bind1(Primitive.Erfc, [x]);
 }
 
 export function sqrt(x: TracerValue) {

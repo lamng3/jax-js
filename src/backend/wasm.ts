@@ -151,7 +151,12 @@ function codegenWasm(kernel: Kernel): Uint8Array<ArrayBuffer> {
   if (distinctOps.has(AluOp.Cos)) funcs.cos = wasm_cos(cg);
   if (distinctOps.has(AluOp.Asin)) funcs.asin = wasm_asin(cg);
   if (distinctOps.has(AluOp.Atan)) funcs.atan = wasm_atan(cg);
-  if (distinctOps.has(AluOp.Exp)) funcs.exp = wasm_exp(cg);
+  if (
+    distinctOps.has(AluOp.Exp) ||
+    distinctOps.has(AluOp.Erf) ||
+    distinctOps.has(AluOp.Erfc)
+  )
+    funcs.exp = wasm_exp(cg);
   if (distinctOps.has(AluOp.Log)) funcs.log = wasm_log(cg);
   if (distinctOps.has(AluOp.Erf)) funcs.erf = wasm_erf(cg, funcs.exp);
   if (distinctOps.has(AluOp.Erfc)) funcs.erfc = wasm_erfc(cg, funcs.exp);

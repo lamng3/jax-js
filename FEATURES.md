@@ -612,32 +612,32 @@ would need substantial changes to work well in JavaScript.
 
 **Activation functions:**
 
-| API              | Support | Notes            |
-| ---------------- | ------- | ---------------- |
-| `relu`           | 🟢      |                  |
-| `relu6`          | 🟢      |                  |
-| `sigmoid`        | 🟢      |                  |
-| `softplus`       | 🟢      |                  |
-| `sparse_plus`    | 🟠      |                  |
-| `sparse_sigmoid` | 🟠      |                  |
-| `soft_sign`      | 🟢      |                  |
-| `silu`           | 🟢      |                  |
-| `swish`          | 🟢      |                  |
-| `log_sigmoid`    | 🟢      |                  |
-| `leaky_relu`     | 🟢      |                  |
-| `hard_sigmoid`   | 🟠      |                  |
-| `hard_silu`      | 🟠      |                  |
-| `hard_swish`     | 🟠      |                  |
-| `hard_tanh`      | 🟠      |                  |
-| `tanh`           | 🟢      |                  |
-| `elu`            | 🟢      |                  |
-| `celu`           | 🟢      |                  |
-| `selu`           | 🟠      |                  |
-| `gelu`           | 🟡      | Approximate GELU |
-| `glu`            | 🟢      |                  |
-| `squareplus`     | 🟢      |                  |
-| `mish`           | 🟢      |                  |
-| `identity`       | 🟢      |                  |
+| API              | Support | Notes |
+| ---------------- | ------- | ----- |
+| `relu`           | 🟢      |       |
+| `relu6`          | 🟢      |       |
+| `sigmoid`        | 🟢      |       |
+| `softplus`       | 🟢      |       |
+| `sparse_plus`    | 🟠      |       |
+| `sparse_sigmoid` | 🟠      |       |
+| `soft_sign`      | 🟢      |       |
+| `silu`           | 🟢      |       |
+| `swish`          | 🟢      |       |
+| `log_sigmoid`    | 🟢      |       |
+| `leaky_relu`     | 🟢      |       |
+| `hard_sigmoid`   | 🟠      |       |
+| `hard_silu`      | 🟠      |       |
+| `hard_swish`     | 🟠      |       |
+| `hard_tanh`      | 🟠      |       |
+| `tanh`           | 🟢      |       |
+| `elu`            | 🟢      |       |
+| `celu`           | 🟢      |       |
+| `selu`           | 🟠      |       |
+| `gelu`           | 🟢      |       |
+| `glu`            | 🟢      |       |
+| `squareplus`     | 🟢      |       |
+| `mish`           | 🟢      |       |
+| `identity`       | 🟢      |       |
 
 **Other functions:**
 

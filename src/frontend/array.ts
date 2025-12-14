@@ -846,6 +846,12 @@ export class Array extends Tracer {
       [Primitive.Log]([x]) {
         return [x.#unary(AluOp.Log)];
       },
+      [Primitive.Erf]([x]) {
+        return [x.#unary(AluOp.Erf)];
+      },
+      [Primitive.Erfc]([x]) {
+        return [x.#unary(AluOp.Erfc)];
+      },
       [Primitive.Sqrt]([x]) {
         return [x.#unary(AluOp.Sqrt)];
       },

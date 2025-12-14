@@ -1,6 +1,14 @@
 // Tests for the f16 data type.
 
-import { defaultDevice, grad, init, jit, jvp, numpy as np } from "@jax-js/jax";
+import {
+  defaultDevice,
+  grad,
+  init,
+  jit,
+  jvp,
+  nn,
+  numpy as np,
+} from "@jax-js/jax";
 import { beforeEach, expect, suite, test } from "vitest";
 
 // f16 is currently only supported on WebGPU.
@@ -50,5 +58,13 @@ suite.each(devices)("device:%s", (device) => {
     const y = g(x);
     expect(y.dtype).toBe(np.float16);
     expect(y.ref.dataSync()).toEqual(new Float16Array([3.0, 5.0]));
+  });
+
+  test("erfc() works for f16", () => {
+    // nn.gelu() with approximate=false uses erfc().
+    const x = np.array([-1.0, 0.0, 1.0], { dtype: np.float16 });
+    const y = nn.gelu(x, { approximate: false });
+    expect(y.dtype).toBe(np.float16);
+    expect(y).toBeAllclose([-0.1587, 0.0, 0.8413], { rtol: 1e-3 });
   });
 });

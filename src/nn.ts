@@ -2,7 +2,13 @@
 
 import { isFloatDtype } from "./alu";
 import { eye, fudgeArray } from "./frontend/array";
-import { type Axis, broadcast, shrink, stopGradient } from "./frontend/core";
+import {
+  type Axis,
+  broadcast,
+  erfc,
+  shrink,
+  stopGradient,
+} from "./frontend/core";
 import { jit } from "./frontend/jaxpr";
 import {
   absolute,
@@ -146,24 +152,31 @@ export function celu(x: ArrayLike, alpha: ArrayLike = 1.0): Array {
  * @function
  * Gaussion error linear unit (GELU) activation function.
  *
- * This is computed element-wise. Currently jax-js does not support the erf() or
- * gelu() functions exactly as primitives, so an approximation is used:
- * `gelu(x) ~= x * 0.5 * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))`.
+ * This is computed element-wise. There are two variants depending on whether
+ * `approximate` is set (default true):
+ *
+ * - Approximate: `gelu(x) ~= x * 0.5 * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))`
+ * - Exact: `gelu(x) = x * 0.5 * erfc(-x / sqrt(2))`
  *
  * Reference: https://ml-explore.github.io/mlx/build/html/python/nn/_autosummary_functions/mlx.nn.gelu_approx.html
- *
- * This will be improved in the future.
  */
-export const gelu = jit(function gelu(x: Array): Array {
-  const SQRT_2_OVER_PI = Math.sqrt(2 / Math.PI);
-  return x.ref
-    .mul(0.5)
-    .mul(
-      tanh(
-        x.ref.mul(x.ref.mul(x).mul(0.044715).add(1)).mul(SQRT_2_OVER_PI),
-      ).add(1),
-    );
-});
+export const gelu = jit(
+  function gelu(x: Array, opts?: { approximate?: boolean }): Array {
+    if (opts?.approximate ?? true) {
+      const SQRT_2_OVER_PI = Math.sqrt(2 / Math.PI);
+      return x.ref
+        .mul(0.5)
+        .mul(
+          tanh(
+            x.ref.mul(x.ref.mul(x).mul(0.044715).add(1)).mul(SQRT_2_OVER_PI),
+          ).add(1),
+        );
+    } else {
+      return x.ref.mul(0.5).mul(erfc(negative(x.ref.mul(Math.SQRT1_2))));
+    }
+  },
+  { staticArgnums: [1] },
+);
 
 /**
  * Gated linear unit (GLU) activation function.

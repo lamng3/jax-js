@@ -769,6 +769,8 @@ export const abstractEvalRules: { [P in Primitive]: AbstractEvalRule<P> } = {
   [Primitive.Atan]: vectorizedUnopAbstractEval,
   [Primitive.Exp]: vectorizedUnopAbstractEval,
   [Primitive.Log]: vectorizedUnopAbstractEval,
+  [Primitive.Erf]: vectorizedUnopAbstractEval,
+  [Primitive.Erfc]: vectorizedUnopAbstractEval,
   [Primitive.Sqrt]: vectorizedUnopAbstractEval,
   [Primitive.Min]: binopAbstractEval,
   [Primitive.Max]: binopAbstractEval,
