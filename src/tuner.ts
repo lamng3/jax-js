@@ -294,7 +294,7 @@ export function tuneWebgpu(kernel: Kernel): TuneResult {
   ) {
     // Fully unroll the reduce axis.
     const s = dim.st.shape[dim.unroll - 1];
-    if (s <= 32) {
+    if (0 < s && s <= 32) {
       dim.applyUnroll(dim.reduce, s);
     } else {
       // Partially unroll the reduce axis.
