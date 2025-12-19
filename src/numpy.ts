@@ -1202,3 +1202,38 @@ export function std(
 ): Array {
   return sqrt(var_(x, axis, opts));
 }
+
+/** Test element-wise for positive or negative infinity, return bool array. */
+export function isinf(x: ArrayLike): Array {
+  x = fudgeArray(x);
+  return isFloatDtype(x.dtype)
+    ? x.ref.equal(Infinity).add(x.equal(-Infinity))
+    : fullLike(x, false);
+}
+
+/** Test element-wise for NaN (Not a Number). */
+export function isnan(x: ArrayLike): Array {
+  x = fudgeArray(x);
+  return isFloatDtype(x.dtype) ? x.ref.notEqual(x) : fullLike(x, false);
+}
+
+/** Test element-wise for negative infinity, return bool array. */
+export function isneginf(x: ArrayLike): Array {
+  x = fudgeArray(x);
+  return isFloatDtype(x.dtype) ? x.equal(-Infinity) : fullLike(x, false);
+}
+
+/** Test element-wise for positive infinity, return bool array. */
+export function isposinf(x: ArrayLike): Array {
+  x = fudgeArray(x);
+  return isFloatDtype(x.dtype) ? x.equal(Infinity) : fullLike(x, false);
+}
+
+/**
+ * @function
+ * Test element-wise for finite values (not infinity or NaN).
+ */
+export const isfinite = jit(function isfinite(x: Array): Array {
+  if (!isFloatDtype(x.dtype)) return fullLike(x, true);
+  return isnan(x.ref).add(isinf(x)).notEqual(true);
+});

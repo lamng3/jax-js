@@ -81,6 +81,16 @@ test("AluOp.Min and AluOp.Max", () => {
   expect(minOp2.evaluate({ c: 2 })).toBe(2);
 });
 
+test("AluOp.Cmpne", () => {
+  expect(AluExp.cmpne(AluExp.i32(3), AluExp.i32(4)).evaluate({})).toBe(1);
+  expect(AluExp.cmpne(AluExp.i32(5), AluExp.i32(5)).evaluate({})).toBe(0);
+
+  expect(AluExp.cmpne(AluExp.f32(3.0), AluExp.f32(4.0)).evaluate({})).toBe(1);
+  expect(AluExp.cmpne(AluExp.f32(2.5), AluExp.f32(2.5)).evaluate({})).toBe(0);
+
+  expect(AluExp.cmpne(AluExp.f32(NaN), AluExp.f32(NaN)).evaluate({})).toBe(1);
+});
+
 test("AluOp.Exp", () => {
   const e = AluExp.exp(AluExp.f32(3));
   expect(e.evaluate({})).toBeCloseTo(Math.E ** 3);

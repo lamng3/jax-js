@@ -279,12 +279,12 @@ Most operations behave the same way as they do in JAX.
 | `iscomplex`           | ⚪️      | complex numbers                         |
 | `iscomplexobj`        | ⚪️      | complex numbers                         |
 | `isdtype`             | 🟠      |                                         |
-| `isfinite`            | 🟠      |                                         |
+| `isfinite`            | 🟢      |                                         |
 | `isin`                | 🔴      |                                         |
-| `isinf`               | 🟠      |                                         |
-| `isnan`               | 🟠      |                                         |
-| `isneginf`            | 🟠      |                                         |
-| `isposinf`            | 🟠      |                                         |
+| `isinf`               | 🟢      |                                         |
+| `isnan`               | 🟢      |                                         |
+| `isneginf`            | 🟢      |                                         |
+| `isposinf`            | 🟢      |                                         |
 | `isreal`              | ⚪️      | complex numbers                         |
 | `isrealobj`           | ⚪️      | complex numbers                         |
 | `isscalar`            | 🟠      |                                         |

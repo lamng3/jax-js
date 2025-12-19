@@ -401,7 +401,15 @@ function pipelineSource(device: GPUDevice, kernel: Kernel): ShaderInfo {
       else if (op === AluOp.Min) source = `min(${strip1(a)}, ${strip1(b)})`;
       else if (op === AluOp.Max) source = `max(${strip1(a)}, ${strip1(b)})`;
       else if (op === AluOp.Cmplt) source = `(${a} < ${b})`;
-      else if (op === AluOp.Cmpne) source = `(${a} != ${b})`;
+      else if (op === AluOp.Cmpne) {
+        // Edge case: WebGPU doesn't handle NaN correctly, it's unspecified.
+        // This is a reliable way I found to detect NaNs, since the spec says
+        // for `max()`: if one operand is a NaN, the other is returned.
+        const dty = dtypeToWgsl(src[0].dtype);
+        source = isFloatDtype(src[0].dtype)
+          ? `(${a} != ${b} || min(${strip1(a)}, ${dty}(inf())) != ${a})`
+          : `(${a} != ${b})`;
+      }
     } else if (AluGroup.Unary.has(op)) {
       if (op === AluOp.Reciprocal && src[0].op === AluOp.Sqrt) {
         // Special case: 1/sqrt(x) is optimized as rsqrt(x)

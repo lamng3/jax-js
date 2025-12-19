@@ -152,11 +152,13 @@ suite.each(devices)("device:%s", (device) => {
   });
 
   test("comparison ops handle nan", async () => {
-    const x = array([NaN, 1, 2]);
-    expect(await x.ref.greater(NaN).jsAsync()).toEqual([false, false, false]);
-    expect(await x.ref.less(NaN).jsAsync()).toEqual([false, false, false]);
-    expect(await x.ref.equal(NaN).jsAsync()).toEqual([false, false, false]);
-    expect(await x.ref.notEqual(NaN).jsAsync()).toEqual([true, true, true]);
+    const x = array([NaN, 0]);
+    expect(await x.ref.greater(NaN).jsAsync()).toEqual([false, false]);
+    expect(await x.ref.less(NaN).jsAsync()).toEqual([false, false]);
+    expect(await x.ref.equal(NaN).jsAsync()).toEqual([false, false]);
+    expect(await x.ref.notEqual(NaN).jsAsync()).toEqual([true, true]);
+    expect(await x.ref.greaterEqual(NaN).jsAsync()).toEqual([false, false]);
+    expect(await x.ref.lessEqual(NaN).jsAsync()).toEqual([false, false]);
     x.dispose();
   });
 

@@ -1191,4 +1191,17 @@ suite.each(devices)("device:%s", (device) => {
       expect(y).toBeAllclose(Math.sqrt(1.25));
     });
   });
+
+  suite("jax.numpy.isnan()", () => {
+    test("identify special values", () => {
+      // Test isnan and related functions (isinf, isfinite, etc.)
+      const x = np.array([NaN, Infinity, -Infinity, 1]);
+      expect(np.isnan(x.ref).js()).toEqual([true, false, false, false]);
+      expect(np.isinf(x.ref).js()).toEqual([false, true, true, false]);
+      expect(np.isfinite(x.ref).js()).toEqual([false, false, false, true]);
+      expect(np.isneginf(x.ref).js()).toEqual([false, false, true, false]);
+      expect(np.isposinf(x.ref).js()).toEqual([false, true, false, false]);
+      x.dispose();
+    });
+  });
 });

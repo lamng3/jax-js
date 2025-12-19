@@ -160,7 +160,7 @@ export class JaxprEqn {
     rhs = rhs.stack(
       PPrint.pp(
         this.inputs
-          .map((x) => (x instanceof Var ? vp.name(x) : JSON.stringify(x.value)))
+          .map((x) => (x instanceof Var ? vp.name(x) : String(x.value)))
           .join(" "),
       ),
     );

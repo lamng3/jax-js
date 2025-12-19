@@ -290,7 +290,14 @@ export class AluExp implements FpHashable {
     const hasher = new FpHash();
     hasher.update(this.op);
     hasher.update(this.dtype);
-    hasher.update(JSON.stringify(this.arg));
+    if (this.op === AluOp.Const) {
+      // For Const operations, arg is a number. Pass it directly to FpHash which
+      // correctly handles Infinity/-Infinity/NaN via binary representations.
+      // JSON.stringify would convert to "null", causing hash collisions.
+      hasher.update(this.arg);
+    } else {
+      hasher.update(JSON.stringify(this.arg));
+    }
     hasher.update(this.src.length);
     for (const s of this.src) hasher.update(s);
     this.#hash = hasher.value;
@@ -619,6 +626,8 @@ export class AluExp implements FpHashable {
         if (op === AluOp.Mul && x === 1) return src[1 - i];
         if (op === AluOp.Mul && x === 0) return AluExp.const(this.dtype, 0);
         if (op === AluOp.Idiv && i === 1 && x === 1) return src[1 - i];
+        if (op === AluOp.Cmpne && src[i].dtype === DType.Bool && x === 0)
+          return src[1 - i];
       }
     }
 
