@@ -227,7 +227,7 @@ Most operations behave the same way as they do in JAX.
 | `fabs`                | ⚪️      | use `abs`                               |
 | `fill_diagonal`       | 🟠      |                                         |
 | `finfo`               | ⚪️      | Python-specific                         |
-| `fix`                 | 🟠      |                                         |
+| `fix`                 | ⚪️      | use `trunc`                             |
 | `flatnonzero`         | 🔴      |                                         |
 | `flip`                | 🟢      |                                         |
 | `fliplr`              | 🟢      |                                         |
@@ -235,10 +235,10 @@ Most operations behave the same way as they do in JAX.
 | `float_power`         | 🟠      |                                         |
 | `floor`               | 🟠      |                                         |
 | `floor_divide`        | 🟠      |                                         |
-| `fmax`                | 🔴      | use `maximum`                           |
-| `fmin`                | 🔴      | use `minimum`                           |
-| `fmod`                | 🔴      |                                         |
-| `frexp`               | 🔴      |                                         |
+| `fmax`                | 🟠      | use `maximum`                           |
+| `fmin`                | 🟠      | use `minimum`                           |
+| `fmod`                | 🟢      |                                         |
+| `frexp`               | 🟠      |                                         |
 | `frombuffer`          | 🟠      |                                         |
 | `fromfile`            | ⚪️      | Python-specific                         |
 | `fromfunction`        | 🟠      |                                         |

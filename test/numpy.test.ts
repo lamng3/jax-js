@@ -720,6 +720,15 @@ suite.each(devices)("device:%s", (device) => {
     });
   });
 
+  suite("jax.numpy.fmod()", () => {
+    test("computes element-wise fmod", () => {
+      const x = np.array([5, 7, -9, -11]);
+      const y = np.array([3, -4, 2, -3]);
+      const z = np.fmod(x, y);
+      expect(z.js()).toEqual([2, 3, -1, -2]);
+    });
+  });
+
   suite("jax.numpy.exp()", () => {
     test("computes element-wise exponential", () => {
       const x = np.array([-Infinity, 0, 1, 2, 3]);

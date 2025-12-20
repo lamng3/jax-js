@@ -1005,14 +1005,20 @@ export function subtract(x: ArrayLike, y: ArrayLike): Array {
 export function trueDivide(x: ArrayLike, y: ArrayLike): Array {
   x = fudgeArray(x);
   y = fudgeArray(y);
-  if (!isFloatDtype(x.dtype) || !isFloatDtype(y.dtype)) {
-    // TODO: Automatically cast to float if possible?
-    throw new TypeError(
-      `trueDivide: x and y must be floating-point arrays, got ${x.dtype} and ${y.dtype}`,
-    );
+  if (!isFloatDtype(x.dtype) && !isFloatDtype(y.dtype)) {
+    x = x.astype(DType.Float32);
+    y = y.astype(DType.Float32);
   }
   return x.div(y);
 }
+
+/**
+ * @function
+ * Calculate element-wise floating-point modulo operation.
+ */
+export const fmod = jit(function fmod(x: Array, y: Array): Array {
+  return x.ref.sub(y.ref.mul(core.idiv(x, y) as Array));
+});
 
 /** @function Alias of `jax.numpy.trueDivide()`. */
 export const divide = trueDivide;
