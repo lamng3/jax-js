@@ -472,26 +472,26 @@ Most operations behave the same way as they do in JAX.
 While FFT is not supported yet, we welcome contributions in this area. FFT is a very useful
 operation, and we probably need to do some work to get it to work well on GPU within this library.
 
-| API         | Support | Notes |
-| ----------- | ------- | ----- |
-| `fft`       | 🔴      |       |
-| `fft2`      | 🔴      |       |
-| `fftfreq`   | 🔴      |       |
-| `fftn`      | 🔴      |       |
-| `fftshift`  | 🔴      |       |
-| `hfft`      | 🔴      |       |
-| `ifft`      | 🔴      |       |
-| `ifft2`     | 🔴      |       |
-| `ifftn`     | 🔴      |       |
-| `ifftshift` | 🔴      |       |
-| `ihfft`     | 🔴      |       |
-| `irfft`     | 🔴      |       |
-| `irfft2`    | 🔴      |       |
-| `irfftn`    | 🔴      |       |
-| `rfft`      | 🔴      |       |
-| `rfft2`     | 🔴      |       |
-| `rfftfreq`  | 🔴      |       |
-| `rfftn`     | 🔴      |       |
+| API         | Support | Notes                  |
+| ----------- | ------- | ---------------------- |
+| `fft`       | ⚪️      | complex FFT            |
+| `fft2`      | ⚪️      | complex FFT            |
+| `fftfreq`   | ⚪️      | frequences for complex |
+| `fftn`      | ⚪️      | complex FFT            |
+| `fftshift`  | 🟠      |                        |
+| `hfft`      | ⚪️      | complex FFT            |
+| `ifft`      | ⚪️      | complex FFT            |
+| `ifft2`     | ⚪️      | complex FFT            |
+| `ifftn`     | ⚪️      | complex FFT            |
+| `ifftshift` | 🟠      |                        |
+| `ihfft`     | ⚪️      | complex FFT            |
+| `irfft`     | 🔴      |                        |
+| `irfft2`    | 🔴      |                        |
+| `irfftn`    | 🔴      |                        |
+| `rfft`      | 🔴      |                        |
+| `rfft2`     | 🔴      |                        |
+| `rfftfreq`  | 🟠      |                        |
+| `rfftn`     | 🔴      |                        |
 
 ## [`jax.numpy.linalg` module](https://docs.jax.dev/en/latest/jax.numpy.html#module-jax.numpy.linalg)
 
@@ -517,7 +517,7 @@ Similarly, the `linalg` module has some very important operations for linear alg
 | `matrix_power`     | 🔴      |       |
 | `matrix_rank`      | 🔴      |       |
 | `matrix_transpose` | 🟠      |       |
-| `multi_dot`        | 🔴      |       |
+| `multi_dot`        | 🟠      |       |
 | `norm`             | 🟠      |       |
 | `outer`            | 🟠      |       |
 | `pinv`             | 🔴      |       |
