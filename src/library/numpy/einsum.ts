@@ -283,7 +283,7 @@ export function computePath(
     return new EinsumPath(input, sizeMap, []);
   }
   if (!method) {
-    method = input.shapes.length <= 4 ? "optimal" : "naive";
+    method = input.shapes.length <= 5 ? "optimal" : "naive";
   }
   switch (method) {
     case "naive":
@@ -333,8 +333,8 @@ function* allPaths(
   for (let i = 0; i < tensors.length; i++) {
     for (let j = i + 1; j < tensors.length; j++) {
       const pair: [number, number] = [tensors[i], tensors[j]];
-      const remaining = tensors.filter((t) => t !== pair[0] && t !== pair[1]);
-      const newTensors = [...remaining, next];
+      const newTensors = tensors.filter((t) => t !== pair[0] && t !== pair[1]);
+      newTensors.push(next);
       for (const subpath of allPaths(newTensors, next + 1)) {
         yield [pair, ...subpath];
       }

@@ -131,4 +131,27 @@ suite("computePath()", () => {
       2n * (10n * 30n * 20n + 10n * 40n * 30n),
     );
   });
+
+  test("optimal path for 5 tensors (perf)", () => {
+    const startTime = performance.now();
+    const path = computePath(
+      parseEinsumExpression("ab,bc,cd,de,ef->af", [
+        [5n, 10n],
+        [10n, 15n],
+        [15n, 20n],
+        [20n, 25n],
+        [25n, 30n],
+      ]),
+      "optimal",
+    );
+    // Check that it runs within reasonable time.
+    const endTime = performance.now();
+    expect(endTime - startTime).toBeLessThan(100);
+    expect(path.path).toEqual([
+      [0, 1],
+      [2, 5],
+      [3, 6],
+      [4, 7],
+    ]);
+  });
 });
