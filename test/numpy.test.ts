@@ -569,6 +569,27 @@ suite.each(devices)("device:%s", (device) => {
     });
   });
 
+  suite("jax.numpy.tensordot()", () => {
+    test("2-3-4 with 3-4-5", async () => {
+      const x1 = np.arange(24).reshape([2, 3, 4]);
+      const x2 = np.ones([3, 4, 5]);
+      let z = np.tensordot(x1.ref, x2.ref);
+      expect(await z.jsAsync()).toEqual([
+        [66, 66, 66, 66, 66],
+        [210, 210, 210, 210, 210],
+      ]);
+      // Equivalent to the above as explicit sequences.
+      z = np.tensordot(x1, x2, [
+        [1, 2],
+        [0, 1],
+      ]);
+      expect(await z.jsAsync()).toEqual([
+        [66, 66, 66, 66, 66],
+        [210, 210, 210, 210, 210],
+      ]);
+    });
+  });
+
   suite("jax.numpy.meshgrid()", () => {
     test("creates xy meshgrid", () => {
       const x = np.array([1, 2, 3]);

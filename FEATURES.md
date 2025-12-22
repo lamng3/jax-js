@@ -429,7 +429,7 @@ Most operations behave the same way as they do in JAX.
 | `take_along_axis`     | 🟠      |                                         |
 | `tan`                 | 🟢      |                                         |
 | `tanh`                | 🟢      |                                         |
-| `tensordot`           | 🟠      |                                         |
+| `tensordot`           | 🟢      |                                         |
 | `tile`                | 🟢      |                                         |
 | `trace`               | 🟠      |                                         |
 | `trapezoid`           | 🟠      |                                         |

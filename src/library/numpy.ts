@@ -722,6 +722,46 @@ export function dot(x: ArrayLike, y: ArrayLike): Array {
 }
 
 /**
+ * Compute the tensor dot product of two N-dimensional arrays.
+ *
+ * The behavior is determined by `axes`. If an integer `k`, sum over the last
+ * `k` axes of x and the first `k` axes of y. If a tuple, then the first array
+ * corresponds to the axes of x and the second to the axes of y.
+ */
+export function tensordot(
+  x: ArrayLike,
+  y: ArrayLike,
+  axes: number | [number[], number[]] = 2,
+): Array {
+  x = fudgeArray(x);
+  y = fudgeArray(y);
+  if (typeof axes === "number") axes = [range(-axes, 0), range(axes)];
+  const axisX = axes[0].map((a) => checkAxis(a, x.ndim));
+  const axisY = axes[1].map((a) => checkAxis(a, y.ndim));
+  if (axisX.length !== axisY.length) {
+    throw new Error(
+      `tensordot: axes lengths must match, got ${axisX.length} and ${axisY.length}`,
+    );
+  } else if (axisX.length === 0) {
+    // There is no reduction to perform, just do an outer product.
+    return x.reshape([...x.shape, ...rep(y.ndim, 1)]).mul(y);
+  }
+  // Move the axes to the end of X and the end of Y.
+  const freeX = range(x.ndim).filter((a) => !axisX.includes(a));
+  const freeY = range(y.ndim).filter((a) => !axisY.includes(a));
+  let newX = x.transpose([...freeX, ...axisX]);
+  let newY = y.transpose([...freeY, ...axisY]);
+  // Broadcast X over the free axes of Y.
+  newX = newX.reshape(
+    newX.shape.toSpliced(freeX.length, 0, ...rep(freeY.length, 1)),
+  );
+  // Reshape both X and Y so that the reduction dims are flattened to axis -1.
+  newX = newX.reshape([...newX.shape.slice(0, -axisX.length), -1]);
+  newY = newY.reshape([...newY.shape.slice(0, -axisY.length), -1]);
+  return core.dot(newX, newY) as Array;
+}
+
+/**
  * Compute the inner product of two arrays.
  *
  * Unlike `jax.numpy.matmul()` or `jax.numpy.dot()`, this always performs a
