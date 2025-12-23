@@ -168,4 +168,86 @@ suite.each(devices)("device:%s", (device) => {
       [0, 0, 0, 0.5],
     ]);
   });
+
+  test("grouped convolution shape", () => {
+    // Test with 2 groups: input has 4 channels, output has 6 channels
+    // Each group: 2 input channels -> 3 output channels
+    const x = np.zeros([2, 4, 8, 8]); // [N, C_in, H, W]
+    const y = np.zeros([6, 2, 3, 3]); // [C_out, C_in/G, kH, kW]
+    const result = lax.convGeneralDilated(x, y, [1, 1], "VALID", {
+      featureGroupCount: 2,
+    });
+    expect(result.shape).toEqual([2, 6, 6, 6]);
+
+    // Test with 4 groups (depthwise-like): 4 channels, each convolved separately
+    const x2 = np.zeros([1, 4, 5, 5]);
+    const y2 = np.zeros([8, 1, 3, 3]); // 2 output channels per group
+    const result2 = lax.convGeneralDilated(x2, y2, [1, 1], "SAME", {
+      featureGroupCount: 4,
+    });
+    expect(result2.shape).toEqual([1, 8, 5, 5]);
+  });
+
+  test("grouped convolution values", () => {
+    // 2 groups, each doing independent 1d convolution
+    // Group 1: channel 0 with kernel 0
+    // Group 2: channel 1 with kernel 1
+    const x = np.array([
+      [[1, 2, 3, 4]], // channel 0
+      [[5, 6, 7, 8]], // channel 1
+    ]).reshape([1, 2, 4]); // [N=1, C_in=2, W=4]
+
+    const y = np.array([
+      [[1, 0, -1]], // kernel for group 0 -> out channel 0
+      [[1, 1, 1]], // kernel for group 1 -> out channel 1
+    ]).reshape([2, 1, 3]); // [C_out=2, C_in/G=1, kW=3]
+
+    const result = lax.convGeneralDilated(x, y, [1], "VALID", {
+      featureGroupCount: 2,
+    });
+    // Group 0: [1,2,3,4] conv [1,0,-1] = [1-3, 2-4] = [-2, -2]
+    // Group 1: [5,6,7,8] conv [1,1,1] = [5+6+7, 6+7+8] = [18, 21]
+    expect(result.shape).toEqual([1, 2, 2]);
+    expect(result.js()).toEqual([[[-2, -2], [18, 21]]]);
+  });
+
+  test("grad of depthwise conv1d", () => {
+    // Depthwise conv: each input channel convolved with its own kernel
+    // 3 input channels, 3 output channels (1 per group)
+    const f = (x: np.Array, y: np.Array) =>
+      lax.convGeneralDilated(x, y, [1], "VALID", { featureGroupCount: 3 });
+
+    const x = np.array([
+      [[1, 2, 3, 4, 5]], // channel 0
+      [[2, 3, 4, 5, 6]], // channel 1
+      [[3, 4, 5, 6, 7]], // channel 2
+    ]).reshape([1, 3, 5]); // [N=1, C=3, W=5]
+
+    const y = np.array([
+      [[1, -1]], // kernel for channel 0
+      [[1, 0]], // kernel for channel 1
+      [[0, 1]], // kernel for channel 2
+    ]).reshape([3, 1, 2]); // [C_out=3, C_in/G=1, kW=2]
+
+    // Forward pass check
+    const result = f(x.ref, y.ref);
+    expect(result.shape).toEqual([1, 3, 4]);
+    // Channel 0: [1-2, 2-3, 3-4, 4-5] = [-1, -1, -1, -1]
+    // Channel 1: [2, 3, 4, 5]
+    // Channel 2: [4, 5, 6, 7]
+    expect(result.js()).toEqual([[[-1, -1, -1, -1], [2, 3, 4, 5], [4, 5, 6, 7]]]);
+
+    // Gradient w.r.t. input
+    const sumF = (x: np.Array, y: np.Array) => f(x, y).sum();
+    const dx = grad(sumF)(x.ref, y.ref);
+    expect(dx.shape).toEqual([1, 3, 5]);
+
+    // Gradient w.r.t. kernel
+    const dy = grad((y: np.Array, x: np.Array) => sumF(x, y))(y, x);
+    expect(dy.shape).toEqual([3, 1, 2]);
+    // dy[0] = sum of x[0] windows = [1+2+3+4, 2+3+4+5] = [10, 14]
+    // dy[1] = sum of x[1] windows = [2+3+4+5, 3+4+5+6] = [14, 18]
+    // dy[2] = sum of x[2] windows = [3+4+5+6, 4+5+6+7] = [18, 22]
+    expect(dy.js()).toEqual([[[10, 14]], [[14, 18]], [[18, 22]]]);
+  });
 });

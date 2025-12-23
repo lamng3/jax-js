@@ -242,10 +242,12 @@ export function conv(x: Tracer, y: Tracer, params: Partial<ConvParams> = {}) {
       `conv() requires inputs with the same number of dimensions, got ${x.ndim} and ${y.ndim}`,
     );
   }
-  const n = x.ndim - 2;
+  const vmapDims = params.vmapDims ?? 0;
+  const n = x.ndim - 2 - vmapDims;
   if (n < 0) throw new Error("conv() requires at least 2D inputs");
   // conv shape check is delayed until interpretation.
   return bind1(Primitive.Conv, [x, y], {
+    vmapDims,
     strides: params.strides ?? rep(n, 1),
     padding: params.padding ?? rep(n, [0, 0]),
     lhsDilation: params.lhsDilation ?? rep(n, 1),

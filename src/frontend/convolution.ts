@@ -7,10 +7,19 @@
 //  - https://github.com/jax-ml/jax/blob/main/jax/_src/lax/convolution.py
 
 import { Pair, ShapeTracker } from "../shape";
-import { deepEqual, prod, range, rep, zip, zipn } from "../utils";
+import {
+  deepEqual,
+  generalBroadcast,
+  prod,
+  range,
+  rep,
+  zip,
+  zipn,
+} from "../utils";
 
 /** Definition of a general dilated convolution. Should be valid on creation. */
 export interface ConvParams {
+  vmapDims: number; // number of dims to batch in front for (lhs, rhs)
   strides: number[];
   padding: [number, number][];
   lhsDilation: number[];
@@ -41,20 +50,24 @@ Backprop of filter:
 
 /**
  * Check that the shapes and parameters passed to convolution are valid.
+ * Expected shapes of the lhs and rhs of the convolution are:
+ *
+ * - `lhsShape = [*vmapDims, batchSize, inChannels, spatialDims...]`
+ * - `rhsShape = [*vmapDims, outChannels, inChannels, kernelSize...]`
  *
  * If the check succeeds, returns the output shape.
  */
 export function checkConvShape(
   lhsShape: number[],
   rhsShape: number[],
-  { strides, padding, lhsDilation, rhsDilation }: ConvParams,
+  { vmapDims, strides, padding, lhsDilation, rhsDilation }: ConvParams,
 ): number[] {
   if (lhsShape.length !== rhsShape.length) {
     throw new Error(
       `conv() requires inputs with the same number of dimensions, got ${lhsShape.length} and ${rhsShape.length}`,
     );
   }
-  const n = lhsShape.length - 2;
+  const n = lhsShape.length - 2 - vmapDims;
   if (n < 0) throw new Error("conv() requires at least 2D inputs");
   if (strides.length !== n) throw new Error("conv() strides != spatial dims");
   if (padding.length !== n) throw new Error("conv() padding != spatial dims");
@@ -62,10 +75,17 @@ export function checkConvShape(
     throw new Error("conv() lhsDilation != spatial dimensions");
   if (rhsDilation.length !== n)
     throw new Error("conv() rhsDilation != spatial dimensions");
-  if (lhsShape[1] !== rhsShape[1])
+  if (lhsShape[vmapDims + 1] !== rhsShape[vmapDims + 1])
     throw new Error(`conv() input channels: ${lhsShape[1]} != ${rhsShape[1]}`);
 
-  const outShape = [lhsShape[0], rhsShape[0]]; // Batch size and out_channels
+  const outShape = [
+    ...generalBroadcast(
+      lhsShape.slice(0, vmapDims),
+      rhsShape.slice(0, vmapDims),
+    ), // vmap dimensions (broadcast)
+    lhsShape[vmapDims], // Batch size
+    rhsShape[vmapDims], // out_channels
+  ];
 
   // Check each spatial dimension.
   for (let i = 0; i < n; i++) {
@@ -78,7 +98,7 @@ export function checkConvShape(
     if (rhsDilation[i] <= 0 || !Number.isInteger(rhsDilation[i]))
       throw new Error(`conv() rhsDilation[${i}] must be a positive integer`);
 
-    const [x, k] = [lhsShape[i + 2], rhsShape[i + 2]];
+    const [x, k] = [lhsShape[i + vmapDims + 2], rhsShape[i + vmapDims + 2]];
     if (k <= 0) throw new Error("conv() kernel size must be positive");
 
     const [pl, pr] = padding[i];
@@ -362,21 +382,21 @@ function applyDilation(st: ShapeTracker, dilation: number[]): ShapeTracker {
   if (dilation.every((s) => s === 1)) return st;
   // (k) -> (k,1) -[pad]-> (k,s) -> (k*s) -[shrink]-> (k*s-s+1)
   const s_ = dilation;
-  const [a, b, ...k_] = st.shape;
-  st = st.reshape([a, b, ...k_.flatMap((k) => [k, 1])]);
+  const n = s_.length;
+  const prefix = st.shape.slice(0, -n);
+  const k_ = st.shape.slice(-n);
+  st = st.reshape([...prefix, ...k_.flatMap((k) => [k, 1])]);
   st = st.pad([
-    [0, 0],
-    [0, 0],
-    ...s_.flatMap<[number, number]>((s) => [
+    ...prefix.map<Pair>(() => [0, 0]),
+    ...s_.flatMap<Pair>((s) => [
       [0, 0],
       [0, s - 1],
     ]),
   ]);
-  st = st.reshape([a, b, ...k_.map((k, i) => k * s_[i])]);
+  st = st.reshape([...prefix, ...k_.map((k, i) => k * s_[i])]);
   st = st.shrink([
-    [0, a],
-    [0, b],
-    ...k_.map<[number, number]>((k, i) => [0, (k - 1) * s_[i] + 1]),
+    ...prefix.map<Pair>((p) => [0, p]),
+    ...k_.map<Pair>((k, i) => [0, (k - 1) * s_[i] + 1]),
   ]);
   return st;
 }
@@ -392,25 +412,30 @@ export function prepareConv(
   stY: ShapeTracker,
   params: ConvParams,
 ): [ShapeTracker, ShapeTracker] {
-  const n = stX.shape.length - 2; // spatial dimensions count
+  const v = params.vmapDims;
+  const n = stX.shape.length - 2 - v; // spatial dimensions count
+  const vmapShape = stX.shape.slice(0, v);
 
   stX = applyDilation(stX, params.lhsDilation);
 
-  const ks = stY.shape.slice(2); // kernel shape, ks.length == n
-  stX = stX.padOrShrink([[0, 0], [0, 0], ...params.padding]);
+  const ks = stY.shape.slice(v + 2); // kernel shape, ks.length == n
+  stX = stX.padOrShrink([...rep<Pair>(v + 2, [0, 0]), ...params.padding]);
   stX = pool(stX, ks, params.strides, params.rhsDilation);
 
   // Permute in channels to the end along with ks, to be reduced.
-  stX = stX.moveaxis(1, n + 1).reshape([
-    stX.shape[0], // batch size
+  stX = stX.moveaxis(v + 1, v + n + 1).reshape([
+    ...vmapShape, // vmap dimensions
+    stX.shape[v], // batch size
     1, // output channels
-    ...stX.shape.slice(2, n + 2), // spatial dimensions
-    stX.shape[1] * prod(ks), // reduction
+    ...stX.shape.slice(v + 2, v + n + 2), // spatial dimensions
+    stX.shape[v + 1] * prod(ks), // reduction
   ]);
   stY = stY.reshape([
-    stY.shape[0], // output channels
+    ...vmapShape, // vmap dimensions
+    1, // batch size (broadcasts with stX's batch size)
+    stY.shape[v], // output channels
     ...rep(n, 1), // spatial dimensions
-    stY.shape[1] * prod(ks), // reduction
+    stY.shape[v + 1] * prod(ks), // reduction
   ]);
 
   return [stX, stY];

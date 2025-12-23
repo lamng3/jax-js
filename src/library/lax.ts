@@ -6,7 +6,7 @@
 import { Array, ArrayLike } from "../frontend/array";
 import * as core from "../frontend/core";
 import { bind1, Primitive } from "../frontend/core";
-import { vmap } from "../frontend/vmap";
+import { moveaxis, vmap } from "../frontend/vmap";
 import { checkAxis, deepEqual, prod, range, rep, zipn } from "../utils";
 
 /**
@@ -168,9 +168,11 @@ export function convGeneralDilated(
   {
     lhsDilation,
     rhsDilation,
+    featureGroupCount = 1,
   }: {
     lhsDilation?: number[];
     rhsDilation?: number[];
+    featureGroupCount?: number;
   } = {},
 ): Array {
   if (lhs.ndim < 2) throw new Error("lhs must have at least 2 dimensions");
@@ -188,6 +190,45 @@ export function convGeneralDilated(
       rhsDilation ?? rep(rhs.ndim - 2, 1),
       padding,
     );
+  }
+  if (featureGroupCount !== 1) {
+    // We implement grouped convolutions by using leading vmapDims in the
+    // convolution operator, then concatenating at the end.
+    //
+    // lhs: [N, C_in, ...xs]         -> [G, N, C_in / G, ...xs]
+    // rhs: [C_out, C_in / G, ...ks] -> [G, C_out / G, C_in / G, ...ks]
+    //
+    // Convolve normally to get [G, N, C_out / G, ...ys], then move the G axis
+    // back and reshape to [N, C_out, ...ys].
+    const G = featureGroupCount;
+    const [N, C_in, ...xs] = lhs.shape;
+    const [C_out, C_in_per_group, ...ks] = rhs.shape;
+    if (C_in % G !== 0) {
+      throw new Error(
+        `featureGroupCount=${G} must divide input channels=${C_in}`,
+      );
+    }
+    if (C_out % G !== 0) {
+      throw new Error(
+        `featureGroupCount=${G} must divide output channels=${C_out}`,
+      );
+    }
+    if (C_in / G !== C_in_per_group) {
+      throw new Error(
+        `rhs input channels=${C_in_per_group} must equal lhs input channels / groups=${C_in / G}`,
+      );
+    }
+    const lhsGrouped = moveaxis(lhs.reshape([N, G, C_in / G, ...xs]), 1, 0);
+    const rhsGrouped = rhs.reshape([G, C_out / G, C_in_per_group, ...ks]);
+    const result = core.conv(lhsGrouped, rhsGrouped, {
+      vmapDims: 1, // Batch over G
+      strides: windowStrides,
+      padding,
+      lhsDilation,
+      rhsDilation,
+    }) as Array;
+    const ys = result.shape.slice(3);
+    return (moveaxis(result, 0, 1) as Array).reshape([N, C_out, ...ys]);
   }
   return core.conv(lhs, rhs, {
     strides: windowStrides,

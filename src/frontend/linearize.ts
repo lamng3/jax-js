@@ -733,20 +733,23 @@ const transposeRules: Partial<{ [P in Primitive]: TransposeRule<P> }> = {
     if (lhs instanceof UndefPrimal === rhs instanceof UndefPrimal)
       throw new NonlinearError(Primitive.Conv);
     // See rules for transposing a convolution in `convolution.ts`.
-    const rev01 = [1, 0, ...range(2, ct.ndim)];
+    const v = params.vmapDims;
+    // Permutation to swap batch/channel dims (axes v and v+1), keeping vmapDims first.
+    const rev01 = [...range(v), v + 1, v, ...range(v + 2, ct.ndim)];
     if (lhs instanceof UndefPrimal) {
       // Transpose to LHS (activations).
       let kernel = rhs as Tracer;
       kernel = transpose(kernel, rev01); // Reverse in <-> out channels.
-      kernel = flip(kernel, range(2, kernel.ndim)); // Flip spatial dimensions.
+      kernel = flip(kernel, range(v + 2, kernel.ndim)); // Flip spatial dimensions.
       const result = conv(ct, kernel, {
+        vmapDims: v,
         strides: params.lhsDilation,
         // Reference: _conv_general_vjp_lhs_padding()
         padding: params.padding.map<[number, number]>(([pl, _pr], i) => {
           // dilated kernel_size in this dimension
           const dilatedKernel =
-            (kernel.shape[i + 2] - 1) * params.rhsDilation[i] + 1;
-          const dilatedCt = (ct.shape[i + 2] - 1) * params.strides[i] + 1;
+            (kernel.shape[i + v + 2] - 1) * params.rhsDilation[i] + 1;
+          const dilatedCt = (ct.shape[i + v + 2] - 1) * params.strides[i] + 1;
           const padBefore = dilatedKernel - 1 - pl;
           // Cannot calculate `padAfter = dilatedKernel - 1 - pr` because strides
           // may not produce an equal dilated kernel, for instance, 6 / stride 2
@@ -755,7 +758,7 @@ const transposeRules: Partial<{ [P in Primitive]: TransposeRule<P> }> = {
           // Instead, we set it to make the output shape (before strides) match
           // with dilatedLhs, currently it's less than dilatedLhs.
           const dilatedLhs =
-            (lhs.aval.shape[i + 2] - 1) * params.lhsDilation[i] + 1;
+            (lhs.aval.shape[i + v + 2] - 1) * params.lhsDilation[i] + 1;
           const padAfter =
             dilatedLhs + dilatedKernel - 1 - dilatedCt - padBefore;
           return [padBefore, padAfter];
@@ -769,14 +772,15 @@ const transposeRules: Partial<{ [P in Primitive]: TransposeRule<P> }> = {
       const newLhs = transpose(lhs as Tracer, rev01); // Reverse batch <-> in channels.
       const newRhs = transpose(ct, rev01); // Reverse batch <-> out channels.
       let result = conv(newLhs, newRhs, {
+        vmapDims: v,
         strides: params.rhsDilation,
         // Reference: _conv_general_vjp_rhs_padding()
         padding: params.padding.map<[number, number]>(([pl, _pr], i) => {
           const dilatedLhs =
-            (lhs.aval.shape[i + 2] - 1) * params.lhsDilation[i] + 1;
+            (lhs.aval.shape[i + v + 2] - 1) * params.lhsDilation[i] + 1;
           const dilatedKernel =
-            (rhs.aval.shape[i + 2] - 1) * params.rhsDilation[i] + 1;
-          const dilatedCt = (ct.shape[i + 2] - 1) * params.strides[i] + 1;
+            (rhs.aval.shape[i + v + 2] - 1) * params.rhsDilation[i] + 1;
+          const dilatedCt = (ct.shape[i + v + 2] - 1) * params.strides[i] + 1;
           const padFromLhs = dilatedCt - dilatedLhs;
           const padFromRhs = dilatedKernel - pl - 1;
           return [pl, padFromLhs + padFromRhs];
